@@ -9,20 +9,33 @@ terminals = [
     {"name": "Terminal 2", "ip": "192.168.2.222"},
 ]
 
+# Fetch attendance logs along with user details
 def fetch_attendance_from_terminal(ip, label):
     zk = ZK(ip, port=4370, timeout=5, password=0, force_udp=False, ommit_ping=True)
     logs = []
     try:
         conn = zk.connect()
         conn.disable_device()
+
+        # Fetch attendance logs
         attendance = conn.get_attendance()
+
+        # Fetch user data (usernames, user IDs, etc.)
+        users = conn.get_users()
+
+        # Create a mapping from user_id to username
+        user_dict = {user.user_id: user.name for user in users}
+
+        # Create logs with the terminal name, user ID, username, timestamp, and status
         for log in attendance:
             logs.append({
                 "terminal": label,
                 "user_id": log.user_id,
+                "username": user_dict.get(log.user_id, "Unknown"),  # Get the username if available
                 "timestamp": log.timestamp,
                 "status": log.status,
             })
+
         conn.enable_device()
         conn.disconnect()
     except Exception as e:

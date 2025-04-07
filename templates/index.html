@@ -2,29 +2,116 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZKTeco Attendance Logs</title>
+
+    <!-- Bootstrap CDN -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Optional: Add custom styles -->
+    <style>
+        body {
+            padding-top: 20px;
+            background-color: #f8f9fa;
+            margin-bottom: 60px; /* Ensures there's enough space for the footer */
+            min-height: 100vh; /* Ensures footer stays at the bottom if content is short */
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            max-width: 80%;
+            flex-grow: 1;
+        }
+
+        .table th, .table td {
+            vertical-align: middle;
+        }
+
+        .thead-dark {
+            background-color: #1244C6 !important;
+        }
+
+        .table-hover tbody tr:hover {
+            background-color: #e3f2fd;
+        }
+
+        footer {
+            background-color: #1244C6; /* Updated color */
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+            margin-top: 30px; /* Adds some space between the table and footer */
+            position: relative;
+        }
+
+        footer p {
+            margin: 0;
+        }
+
+        .table th, .table td {
+            color: #333;
+        }
+
+        /* Styling for the logo */
+        .logo {
+            display: block;
+            margin: 20px auto;
+            cursor: pointer;
+            width: 120px; /* Adjusted width */
+        }
+    </style>
 </head>
 <body>
-    <h1>Attendance Logs from All Terminals</h1>
-    <table border="1">
-        <thead>
-            <tr>
-                <th>Terminal</th>
-                <th>User ID</th>
-                <th>Timestamp</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for log in logs %}
-            <tr>
-                <td>{{ log.terminal }}</td>
-                <td>{{ log.user_id }}</td>
-                <td>{{ log.timestamp }}</td>
-                <td>{{ log.status }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <!-- Logo that refreshes the page when clicked -->
+    <a href="javascript:void(0);" onclick="window.location.reload();">
+        <img src="{{ url_for('static', filename='images/bdintexLogo.png') }}" alt="Bdintex Logo" class="logo">
+    </a>
+
+    <div class="container">
+        <h1 class="text-center text-primary">Attendance Logs from All Terminals</h1>
+
+        <!-- Table with Bootstrap styling -->
+        <table class="table table-striped table-bordered table-hover">
+            <thead class="thead-dark">
+                <tr>
+                    <th>Terminal</th>
+                    <th>User ID</th>
+                    <th>Username</th>
+                    <th>Timestamp</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.terminal }}</td>
+                    <td>{{ log.user_id }}</td>
+                    <td>{{ log.username }}</td>
+                    <td>{{ log.timestamp }}</td>
+                    <td>
+                        {% if log.status|trim == "1" %}
+                            Clocked In
+                        {% elif log.status|trim == "2" %}
+                            Clocked Out
+                        {% else %}
+                            Unknown Status
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Bootstrap JS (optional) -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <!-- Footer -->
+    <footer>
+        <p>&copy; 2025 - Bdintex PLTD. All rights reserved.</p>
+    </footer>
 </body>
 </html>
