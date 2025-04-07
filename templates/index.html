@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ZKTeco Attendance Logs</title>
+</head>
+<body>
+    <h1>Attendance Logs from All Terminals</h1>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Terminal</th>
+                <th>User ID</th>
+                <th>Timestamp</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td>{{ log.terminal }}</td>
+                <td>{{ log.user_id }}</td>
+                <td>{{ log.timestamp }}</td>
+                <td>{{ log.status }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
