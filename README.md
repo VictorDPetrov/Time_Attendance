@@ -27,5 +27,5 @@ This is a simple Python Flask web application that connects to two ZKTeco biomet
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/VictorDPetrov/Time_Attendance.git
-cd Time_Attendance
+git clone https://github.com/VictorDPetrov/ZKTeco-Time_Attendance.git
+cd ZKTeco-Time_Attendance
