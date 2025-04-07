@@ -1,6 +1,6 @@
 # ZKTeco Flask Attendance Viewer
 
-This is a simple Python Flask web application that connects to two ZKTeco biometric terminals (`ZLM60_TFT` models) over the local network, retrieves attendance logs from both, and displays them in a clean web interface.
+This is a simple Python Flask web application that connects to two ZKTeco biometric terminals (`K40` models) over the local network, retrieves attendance logs from both, and displays them in a clean web interface.
 
 ---
 
