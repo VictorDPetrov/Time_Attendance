@@ -7,7 +7,7 @@ This is a simple Python Flask web application that connects to two ZKTeco biomet
 ## 🔧 Features
 
 - Connects to multiple ZKTeco terminals via UDP.
-- Fetches and displays attendance logs (Terminal, Employee ID, Employee name, Tmestamp, Status *Clocked In / Clocked Out*).
+- Fetches and displays attendance logs (Terminal, Employee ID, Employee name, Tmestamp, Status - *Clocked In / Clocked Out*).
 - Displays logs sorted by timestamp.
 - Easy to run locally and customizable.
 - Flask-based architecture, easily extendable with database, filters, and exports.
