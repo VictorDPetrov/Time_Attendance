@@ -1,0 +1,73 @@
+html,
+body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    background-color: #f8f9fa;
+}
+
+.container {
+    max-width: 80%;
+    flex-grow: 1;
+}
+
+.attendance {
+    color: #1244C6;
+}
+
+.table th,
+.table td {
+    vertical-align: middle;
+}
+
+.thead-dark {
+    background-color: #1244C6 !important;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #e3f2fd;
+}
+
+.btn-export {
+    background-color: #1244C6;
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.btn-export:hover {
+    background-color: #0f36A1;
+}
+
+footer {
+    background-color: #1244C6;
+    color: white;
+    padding: 20px 0;
+    text-align: center;
+    margin-top: auto;
+}
+
+footer p {
+    margin: 0;
+}
+
+.table th,
+.table td {
+    color: #333;
+}
+
+.logo {
+    display: block;
+    margin: 20px auto;
+    cursor: pointer;
+    width: 120px;
+}
