@@ -11,7 +11,6 @@ import time
 PORT = 4370
 TIMEOUT = .5
 
-
 app = Flask(__name__)
 
 terminals = [
@@ -87,7 +86,6 @@ def reboot_terminal():
         print(f"Error rebooting device {ip}: {e}")
         return jsonify({"success": False, "message": "Failed to restart device."}), 500
 
-
 @app.route('/api/set_time', methods=['POST'])
 def api_set_time():
     ip = request.json.get('ip')
@@ -158,11 +156,11 @@ def fetch_attendance_from_terminal(ip, label):
         })
     return logs
 
-
 @app.route('/')
 def index():
     all_logs = []
     enriched_terminals = []
+    current_terminal_time = "Unavailable"
 
     for terminal in terminals:
         ip = terminal["ip"]
@@ -176,7 +174,8 @@ def index():
                 conn = get_connection(ip)
                 if conn:
                     user_count = len(conn.get_users())
-                    current_time = conn.get_time().strftime('%Y-%m-%d %H:%M:%S')
+                    current_time = conn.get_time().strftime('%Y-%m-%d %H:%M:%S')  # Get the time from the terminal
+                    current_terminal_time = current_time  # Save the first available terminal time
                     conn.disconnect()
         except Exception as e:
             print(f"Error with {terminal['name']} at {ip}:", e)
@@ -204,9 +203,7 @@ def index():
 
     all_logs.sort(key=lambda x: x['timestamp'] if x['timestamp'] != "-" else datetime.min, reverse=True)
 
-    return render_template('index.html', logs=all_logs, terminals=enriched_terminals)
-
-
+    return render_template('index.html', logs=all_logs, terminals=enriched_terminals, terminal_time=current_terminal_time)
 
 @app.route('/export_csv')
 def export_csv():
@@ -245,6 +242,79 @@ def export_json():
             log['timestamp'] = log['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
 
     return jsonify(all_logs)
+
+@app.route('/attendance', methods=['GET', 'POST'])
+def attendance():
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+    
+    all_logs = []
+
+    # Fetch logs for all terminals
+    for terminal in terminals:
+        ip = terminal["ip"]
+        logs = fetch_attendance_from_terminal(ip, terminal["name"])
+        all_logs.extend(logs)
+
+    # Convert string dates to datetime objects if provided
+    if start_date:
+        start_date = datetime.strptime(start_date, '%Y-%m-%d')
+    if end_date:
+        end_date = datetime.strptime(end_date, '%Y-%m-%d')
+
+    # Filter logs by date range if start_date and end_date are provided
+    if start_date or end_date:
+        filtered_logs = []
+        for log in all_logs:
+            log_time = log['timestamp']
+            if isinstance(log_time, str):
+                log_time = datetime.strptime(log_time, '%Y-%m-%d %H:%M:%S')  # Convert timestamp string to datetime
+
+            log_date = log_time.date()
+
+            if start_date and log_date < start_date.date():
+                continue
+            if end_date and log_date > end_date.date():
+                continue
+
+            filtered_logs.append(log)
+        all_logs = filtered_logs
+
+    # Group by user_id and get first clock-in and last clock-out
+    user_logs = {}
+    for log in all_logs:
+        user_id = log['user_id']
+        status = log['status']
+        timestamp = log['timestamp']
+
+        if user_id not in user_logs:
+            user_logs[user_id] = {
+                'username': log['username'],
+                'first_clock_in': None,
+                'last_clock_out': None,
+                'clock_in_date': None,
+                'clock_out_date': None
+            }
+
+        if status == "Clocked In" and user_logs[user_id]['first_clock_in'] is None:
+            user_logs[user_id]['first_clock_in'] = timestamp
+            user_logs[user_id]['clock_in_date'] = timestamp.date()  # Get only the date part
+        elif status == "Clocked Out":
+            user_logs[user_id]['last_clock_out'] = timestamp
+            user_logs[user_id]['clock_out_date'] = timestamp.date()  # Get only the date part
+    
+    # Prepare the list to be displayed in the table
+    display_logs = []
+    for user_id, user_data in user_logs.items():
+        display_logs.append({
+            "id": user_id,
+            "user": user_data['username'],
+            "date": user_data['clock_in_date'] if user_data['clock_in_date'] else "N/A",
+            "first_clock_in": user_data['first_clock_in'] if user_data['first_clock_in'] else "Not Clocked In",
+            "last_clock_out": user_data['last_clock_out'] if user_data['last_clock_out'] else "Not Clocked Out"
+        })
+
+    return render_template('attendance.html', logs=display_logs, start_date=start_date, end_date=end_date)
 
 
 if __name__ == '__main__':

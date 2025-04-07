@@ -1,167 +1,172 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
-    <title>ZKTeco Attendance Logs</title>
-  </head>
 
-  <body>
-    <a href="javascript:void(0);" onclick="window.location.reload();"><img src="{{ url_for('static', filename='images/bdintexLogo.png') }}" alt="Bdintex Logo" class="logo" /></a>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <title>ZKTeco Attendance Logs</title>
+</head>
 
-    <div class="container">
-      <div class="container mt-4">
-        <div class="table-responsive">
-          <table class="table table-bordered table-striped text-center align-middle">
-            <thead class="table-dark">
-              <tr>
-                <th>Terminal</th>
-                <th>Status</th>
-                <th>Current Time</th>
-                <th>User Count</th>
-                <th>Functions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for terminal in terminals %}
-                <tr>
-                  <td>{{ terminal.name }}</td>
-                  <td>
-                    {% if terminal.status == 'On' %}
-                      <span class="badge bg-success">Online</span>
-                    {% else %}
-                      <span class="badge bg-danger">Offline</span>
-                    {% endif %}
-                  </td>
-                  <td>{{ terminal.time or '—' }}</td>
-                  <td>{{ terminal.user_count or '—' }}</td>
-                  <td>
-                    <button class="btn btn-sm btn-outline-primary" onclick="handlePing('{{ terminal.ip }}')">Ping</button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="handleReboot('{{ terminal.ip }}')">Reboot</button>
-                    <button class="btn btn-sm btn-outline-success" onclick="handleSetTime('{{ terminal.ip }}')">Set Time</button>
-                    <button class="btn btn-sm btn-outline-warning" onclick="handleGetTime('{{ terminal.ip }}', this)">Get Time</button>
-                    <button class="btn btn-sm btn-outline-info" onclick="handleRefresh()">Refresh</button>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
+<body>
+  <a href="javascript:void(0);" onclick="window.location.reload();"><img
+      src="{{ url_for('static', filename='images/bdintexLogo.png') }}" alt="Bdintex Logo" class="logo" /></a>
 
-      <h1 class="text-center attendance">Attendance Logs from All Terminals</h1>
-
-      <a href="{{ url_for('export_csv') }}" class="btn btn-primary btn-export">Export to CSV</a> &nbsp;
-      <a href="{{ url_for('export_json') }}" class="btn btn-primary btn-export">Export to JSON</a>
-
-      <table class="table table-striped table-bordered table-hover">
-        <thead class="thead-dark">
-          <tr>
-            <th>Terminal</th>
-            <th>User ID</th>
-            <th>Username</th>
-            <th>Timestamp</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for log in logs %}
+  <div class="container">
+    <div class="container mt-4">
+      <div class="table-responsive">
+        <table class="table table-bordered table-striped text-center align-middle">
+          <thead class="table-dark">
             <tr>
-              <td>{{ log.terminal }}</td>
-              <td>{{ log.user_id }}</td>
-              <td>{{ log.username }}</td>
-              <td>{{ log.timestamp }}</td>
-              <td>{{ log.status }}</td>
+              <th>Terminal</th>
+              <th>Status</th>
+              <th>Current Time</th>
+              <th>User Count</th>
+              <th>Functions</th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {% for terminal in terminals %}
+            <tr>
+              <td>{{ terminal.name }}</td>
+              <td>
+                {% if terminal.status == 'On' %}
+                <span class="badge bg-success">Online</span>
+                {% else %}
+                <span class="badge bg-danger">Offline</span>
+                {% endif %}
+              </td>
+              <td>{{ terminal.time or '—'}}</td>
+              <td>{{ terminal.user_count or '—' }}</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="handlePing('{{ terminal.ip }}')">Ping</button>
+                <button class="btn btn-sm btn-outline-danger"
+                  onclick="handleReboot('{{ terminal.ip }}')">Reboot</button>
+                <button class="btn btn-sm btn-outline-success" onclick="handleSetTime('{{ terminal.ip }}')">Set
+                  Time</button>
+                <button class="btn btn-sm btn-outline-warning" onclick="handleGetTime('{{ terminal.ip }}', this)">Get
+                  Time</button>
+                <button class="btn btn-sm btn-outline-info" onclick="handleRefresh()">Refresh</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
 
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <h1 class="text-center attendance">Attendance Logs from All Terminals</h1>
 
-    <footer>
-      <p>&copy; 2025 - Bdintex PLTD. All rights reserved.</p>
-    </footer>
+    <a href="{{ url_for('export_csv') }}" class="btn btn-primary btn-export">Export to CSV</a> &nbsp;
+    <a href="{{ url_for('export_json') }}" class="btn btn-primary btn-export">Export to JSON</a> &nbsp;
+    <a href="/attendance">a</a>
 
-    <script>
-      function sendCommand(endpoint, ip, callback) {
-        fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ip })
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            if (data.success) {
-              alert(data.message || 'Success')
-              if (callback) callback(data)
-            } else {
-              alert(data.message || 'Failed')
-            }
-          })
-          .catch((err) => alert('Error: ' + err))
-      }
-      
-      function handlePing(ip) {
-        sendCommand('/api/ping', ip)
-      }
-      
-      function handleReboot(ip) {
-        if (confirm('Are you sure you want to reboot the device?')) {
-          sendCommand('/api/reboot', ip)
-        }
-      }
-      
-      function handleSetTime(ip) {
-        sendCommand('/api/set_time', ip)
-      }
-      
-      function handleGetTime(ip, btn) {
-        sendCommand('/api/get_time', ip, function (data) {
-          btn.closest('tr').querySelector('td:nth-child(3)').innerText = data.time
-        })
-      }
-      
-      function handleRefresh() {
-        location.reload()
-      }
-      
-      // Polling function to periodically check terminal status
-      function pollTerminalStatus() {
-        fetch('/api/get_terminal_statuses')
-          .then((response) => response.json())
-          .then((data) => {
-            data.terminals.forEach((terminal) => {
-              const row = document.querySelector(`tr[data-ip="${terminal.ip}"]`)
-              if (row) {
-                const statusCell = row.querySelector('td:nth-child(2)')
-                if (terminal.status === 'Online') {
-                  statusCell.innerHTML = '<span class="badge bg-success">Online</span>'
-                } else {
-                  statusCell.innerHTML = '<span class="badge bg-danger">Offline</span>'
-                }
-              }
-            })
-          })
-          .catch((err) => console.error('Error updating status:', err))
-      }
-      
-      // Polling every 10 seconds (adjust the time as needed)
-      setInterval(pollTerminalStatus, 10000)
-      
-      function handleGetTime(ip, btn) {
-        sendCommand('/api/get_time', ip, function (data) {
-          const timeCell = btn.closest('tr').querySelector('td:nth-child(3)')
-          if (timeCell) {
-            timeCell.innerText = data.time || '—' // Ensure proper formatting if no time is returned
+    <table class="table table-striped table-bordered table-hover">
+      <thead class="thead-dark">
+        <tr>
+          <th>Terminal</th>
+          <th>User ID</th>
+          <th>Username</th>
+          <th>Timestamp</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td>{{ log.terminal }}</td>
+          <td>{{ log.user_id }}</td>
+          <td>{{ log.username }}</td>
+          <td>{{ log.timestamp }}</td>
+          <td>{{ log.status }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <footer>
+    <p>&copy; 2025 - Bdintex PLTD. All rights reserved.</p>
+  </footer>
+
+  <script>
+    function sendCommand(endpoint, ip, callback) {
+      fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip })
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.success) {
+            alert(data.message || 'Success')
+            if (callback) callback(data)
+          } else {
+            alert(data.message || 'Failed')
           }
         })
+        .catch((err) => alert('Error: ' + err))
+    }
+
+    function handlePing(ip) {
+      sendCommand('/api/ping', ip)
+    }
+
+    function handleReboot(ip) {
+      if (confirm('Are you sure you want to reboot the device?')) {
+        sendCommand('/api/reboot', ip)
       }
-    </script>
-  </body>
+    }
+
+    function handleSetTime(ip) {
+      sendCommand('/api/set_time', ip)
+    }
+
+    function handleGetTime(ip, btn) {
+      sendCommand('/api/get_time', ip, function (data) {
+        btn.closest('tr').querySelector('td:nth-child(3)').innerText = data.time
+      })
+    }
+
+    function handleRefresh() {
+      location.reload()
+    }
+
+    // Polling function to periodically check terminal status
+    function pollTerminalStatus() {
+      fetch('/api/get_terminal_statuses')
+        .then((response) => response.json())
+        .then((data) => {
+          data.terminals.forEach((terminal) => {
+            const row = document.querySelector(`tr[data-ip="${terminal.ip}"]`)
+            if (row) {
+              const statusCell = row.querySelector('td:nth-child(2)')
+              if (terminal.status === 'Online') {
+                statusCell.innerHTML = '<span class="badge bg-success">Online</span>'
+              } else {
+                statusCell.innerHTML = '<span class="badge bg-danger">Offline</span>'
+              }
+            }
+          })
+        })
+        .catch((err) => console.error('Error updating status:', err))
+    }
+
+    // Polling every 10 seconds (adjust the time as needed)
+    setInterval(pollTerminalStatus, 10000)
+
+    function handleGetTime(ip, btn) {
+      sendCommand('/api/get_time', ip, function (data) {
+        const timeCell = btn.closest('tr').querySelector('td:nth-child(3)')
+        if (timeCell) {
+          timeCell.innerText = data.time || '—' // Ensure proper formatting if no time is returned
+        }
+      })
+    }
+  </script>
+
+  <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
+</body>
+
 </html>
