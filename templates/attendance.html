@@ -1,99 +1,24 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/attendance.css') }}" />
     <title>Attendance Logs</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f4f7fc;
-        }
-
-        h1 {
-            color: #333;
-            text-align: center;
-        }
-
-        form {
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        input[type="date"] {
-            padding: 8px;
-            margin: 5px;
-            border-radius: 4px;
-            border: 1px solid #ccc;
-        }
-
-        button {
-            padding: 8px 16px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background-color: #45a049;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-
-        th,
-        td {
-            padding: 10px;
-            text-align: left;
-            border: 1px solid #ddd;
-        }
-
-        th {
-            background-color: #f2f2f2;
-            color: #333;
-        }
-
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-
-        tr:hover {
-            background-color: #f1f1f1;
-        }
-
-        table {
-            width: 100%;
-            margin-top: 20px;
-            border-collapse: collapse;
-        }
-
-        table,
-        th,
-        td {
-            border: 1px solid #ddd;
-        }
-
-        th,
-        td {
-            padding: 8px;
-            text-align: center;
-        }
-
-        th {
-            background-color: #f2f2f2;
-        }
-    </style>
 </head>
 
 <body>
+    <div class="header" style="text-align: center; margin: 20px 0;">
+        <a href="/">
+            <img src="{{ url_for('static', filename='images/bdintexLogo.png') }}" alt="Bdintex Logo" class="logo"
+                style="max-height: 80px;" />
+        </a>
+        <br />
+        <a href="/" class="btn btn-outline-primary mt-2">Начало</a>
+    </div>
+
     <h1>Attendance Logs</h1>
 
     <form method="GET" action="/attendance">
@@ -131,6 +56,70 @@
         </tbody>
     </table>
 
+    <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
+</body>
+
+</html> -->
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/attendance.css') }}" />
+    <title>Attendance Logs</title>
+</head>
+
+<body>
+    <div class="header" style="text-align: center; margin: 20px 0;">
+        <a href="/">
+            <img src="{{ url_for('static', filename='images/bdintexLogo.png') }}" alt="Bdintex Logo" class="logo"
+                style="max-height: 80px;" />
+        </a>
+        <br />
+        <a href="/" class="btn btn-outline-primary mt-2">Начало</a>
+    </div>
+
+    <h1>Attendance Logs</h1>
+
+    <form method="GET" action="/attendance">
+        <label for="start_date">Start Date:</label>
+        <input type="date" name="start_date" id="start_date" value="{{ start_date if start_date else '' }}">
+        
+        <label for="end_date">End Date:</label>
+        <input type="date" name="end_date" id="end_date" value="{{ end_date if end_date else '' }}">
+        
+        <button type="submit">Filter</button>
+    </form>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>User ID</th>
+                <th>Employee</th>
+                <th>Date</th>
+                <th>Clock In</th>
+                <th>Clock Out</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td>{{ log.id }}</td>
+                <td>{{ log.user }}</td>
+                <td>{{ log.date.strftime('%Y-%m-%d') }}</td>  <!-- Format date as 'YYYY-MM-DD' -->
+                <td>{{ log.first_clock_in.strftime('%H:%M') }}</td>
+                <td>{{ log.last_clock_out.strftime('%H:%M') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+
+    <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
 </body>
 
 </html>
