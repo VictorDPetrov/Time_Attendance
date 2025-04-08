@@ -8,12 +8,16 @@ from datetime import datetime, timedelta, time, date
 import socket
 import time
 import mysql.connector
+from dotenv import dotenv_values
+
+# Load the .env file
+config = dotenv_values(".env")
 
 db_config = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': 'root123',
-    'database': 'bdintex_zkteco'
+    "host": config["DB_HOST"],
+    "user": config["DB_USER"],
+    "password": config["DB_PASSWORD"],
+    "database": config["DB_NAME"]
 }
 
 PORT = 4370
