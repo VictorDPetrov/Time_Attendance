@@ -48,6 +48,20 @@ body {
     background-color: #0f36A1;
 }
 
+.btn-check-attendance {
+    margin-top: 15px;
+    margin-bottom: 15px;
+    font-weight: 500;
+    padding: 8px 16px;
+    transition: 0.2s ease-in-out;
+  }
+  
+  .btn-check-attendance:hover {
+    background-color: #6c757d;
+    color: #fff;
+  }
+  
+
 footer {
     background-color: #1244C6;
     color: white;

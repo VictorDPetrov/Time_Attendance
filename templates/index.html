@@ -60,7 +60,11 @@
 
     <a href="{{ url_for('export_csv') }}" class="btn btn-primary btn-export">Export to CSV</a> &nbsp;
     <a href="{{ url_for('export_json') }}" class="btn btn-primary btn-export">Export to JSON</a> &nbsp;
-    <a href="/attendance">a</a>
+    <div class="text-end mb-3">
+      <a href="/attendance" class="btn btn-outline-secondary btn-check-attendance">
+        Проверка - Присъствие
+      </a>
+    </div>
 
     <table class="table table-striped table-bordered table-hover">
       <thead class="thead-dark">

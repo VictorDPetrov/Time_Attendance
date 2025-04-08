@@ -7,6 +7,14 @@ from flask import jsonify, request
 from datetime import datetime
 import socket
 import time
+import mysql.connector
+
+db_config = {
+    'host': 'localhost',
+    'user': 'root',
+    'password': 'root123',
+    'database': 'bdintex_zkteco'
+}
 
 PORT = 4370
 TIMEOUT = .5
@@ -17,6 +25,41 @@ terminals = [
     {"name": "Terminal 1", "ip": "192.168.2.221"},
     {"name": "Terminal 2", "ip": "192.168.2.222"},
 ]
+
+from datetime import datetime
+
+def fetch_logs_from_db(start_date=None, end_date=None):
+    # Create a connection to the MySQL database
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor(dictionary=True)
+
+    # Build the base query
+    query = "SELECT userID, employee, workday, clockIn, clockOut FROM logs"
+    filters = []
+
+    # If start_date is provided and it's a string, convert it to datetime.date
+    if start_date:
+        if isinstance(start_date, str):  # Check if it's a string
+            start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+        filters.append(f"workday >= '{start_date}'")
+
+    # If end_date is provided and it's a string, convert it to datetime.date
+    if end_date:
+        if isinstance(end_date, str):  # Check if it's a string
+            end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+        filters.append(f"workday <= '{end_date}'")
+    
+    if filters:
+        query += " WHERE " + " AND ".join(filters)
+
+    cursor.execute(query)
+    logs = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    return logs
+
+
 
 def check_terminal_status(ip):
     try:
@@ -156,6 +199,43 @@ def fetch_attendance_from_terminal(ip, label):
         })
     return logs
 
+@app.route('/export_csv')
+def export_csv():
+    all_logs = []
+    for terminal in terminals:
+        logs = fetch_attendance_from_terminal(terminal["ip"], terminal["name"])
+        all_logs.extend(logs)
+
+    fieldnames = ['terminal', 'user_id', 'username', 'timestamp', 'status']
+
+    def generate():
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for log in all_logs:
+            log['timestamp'] = log['timestamp'].strftime('%Y-%m-%d %H:%M:%S') if hasattr(log['timestamp'], 'strftime') else log['timestamp']
+            writer.writerow(log)
+
+        output.seek(0)
+        return output.getvalue()
+
+    return Response(generate(), mimetype='text/csv', headers={"Content-Disposition": "attachment;filename=attendance_logs.csv"})
+
+@app.route('/export_json')
+def export_json():
+    all_logs = []
+    for terminal in terminals:
+        logs = fetch_attendance_from_terminal(terminal["ip"], terminal["name"])
+        all_logs.extend(logs)
+
+    # Convert datetime objects to strings
+    for log in all_logs:
+        if hasattr(log['timestamp'], 'strftime'):
+            log['timestamp'] = log['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
+
+    return jsonify(all_logs)
+
 @app.route('/')
 def index():
     all_logs = []
@@ -205,76 +285,124 @@ def index():
 
     return render_template('index.html', logs=all_logs, terminals=enriched_terminals, terminal_time=current_terminal_time)
 
-@app.route('/export_csv')
-def export_csv():
-    all_logs = []
-    for terminal in terminals:
-        logs = fetch_attendance_from_terminal(terminal["ip"], terminal["name"])
-        all_logs.extend(logs)
 
-    fieldnames = ['terminal', 'user_id', 'username', 'timestamp', 'status']
+# Route to display attendance
+from datetime import datetime, time
 
-    def generate():
-        output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=fieldnames)
-        writer.writeheader()
+from datetime import datetime
 
-        for log in all_logs:
-            log['timestamp'] = log['timestamp'].strftime('%Y-%m-%d %H:%M:%S') if hasattr(log['timestamp'], 'strftime') else log['timestamp']
-            writer.writerow(log)
+# @app.route('/attendance', methods=['GET', 'POST'])
+# def attendance():
+#     start_date = request.args.get('start_date', None)
+#     end_date = request.args.get('end_date', None)
 
-        output.seek(0)
-        return output.getvalue()
+#     Fetch logs from the database
+#     all_logs = fetch_logs_from_db(start_date, end_date)
 
-    return Response(generate(), mimetype='text/csv', headers={"Content-Disposition": "attachment;filename=attendance_logs.csv"})
+#     Convert string dates to datetime objects if provided
+#     if start_date:
+#         start_date = datetime.strptime(start_date, '%Y-%m-%d')
+#     if end_date:
+#         end_date = datetime.strptime(end_date, '%Y-%m-%d')
 
+#     Filter logs by date range if start_date and end_date are provided
+#     if start_date or end_date:
+#         filtered_logs = []
+#         for log in all_logs:
+#             log_time = datetime.strptime(log['workday'], '%Y-%m-%d')  # Convert to datetime object
 
-@app.route('/export_json')
-def export_json():
-    all_logs = []
-    for terminal in terminals:
-        logs = fetch_attendance_from_terminal(terminal["ip"], terminal["name"])
-        all_logs.extend(logs)
+#             if start_date and log_time < start_date:
+#                 continue
+#             if end_date and log_time > end_date:
+#                 continue
 
-    # Convert datetime objects to strings
-    for log in all_logs:
-        if hasattr(log['timestamp'], 'strftime'):
-            log['timestamp'] = log['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
+#             filtered_logs.append(log)
+#         all_logs = filtered_logs
 
-    return jsonify(all_logs)
+#     Group by user_id and get first clock-in and last clock-out
+#     user_logs = {}
+#     for log in all_logs:
+#         user_id = log['userID']
+#         If clockIn and clockOut are datetime objects, extract the time part using .time()
+#         timestamp_in = datetime.combine(datetime.today(), log['clockIn'].time()) if log['clockIn'] else None
+#         timestamp_out = datetime.combine(datetime.today(), log['clockOut'].time()) if log['clockOut'] else None
+
+#         if user_id not in user_logs:
+#             user_logs[user_id] = {
+#                 'employee': log['employee'],
+#                 'first_clock_in': None,
+#                 'last_clock_out': None,
+#                 'clock_in_date': None,
+#                 'clock_out_date': None
+#             }
+
+#         If clocked in
+#         if timestamp_in and user_logs[user_id]['first_clock_in'] is None:
+#             user_logs[user_id]['first_clock_in'] = timestamp_in
+#             user_logs[user_id]['clock_in_date'] = timestamp_in.date()
+
+#         If clocked out
+#         if timestamp_out:
+#             user_logs[user_id]['last_clock_out'] = timestamp_out
+#             user_logs[user_id]['clock_out_date'] = timestamp_out.date()
+
+#     Prepare the list to be displayed in the table
+#     display_logs = []
+#     for user_id, user_data in user_logs.items():
+#         display_logs.append({
+#             "id": user_id,
+#             "user": user_data['employee'],
+#             "date": user_data['clock_in_date'] if user_data['clock_in_date'] else "N/A",
+#             "first_clock_in": user_data['first_clock_in'] if user_data['first_clock_in'] else "Not Clocked In",
+#             "last_clock_out": user_data['last_clock_out'] if user_data['last_clock_out'] else "Not Clocked Out"
+#         })
+
+#     return render_template('attendance.html', logs=display_logs, start_date=start_date, end_date=end_date)
+
+# In the route function
+# @app.route('/attendance', methods=['GET'])
+# def attendance():
+#     start_date = request.args.get('start_date')
+#     end_date = request.args.get('end_date')
+
+#     # Convert strings to datetime.date
+#     if start_date:
+#         start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+#     if end_date:
+#         end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+
+#     all_logs = fetch_logs_from_db(start_date=start_date, end_date=end_date)
+    
+#     return render_template('attendance.html', logs=all_logs, start_date=start_date, end_date=end_date)
+
+from datetime import datetime
+
+from datetime import datetime, date  # Import `date` from `datetime`
 
 @app.route('/attendance', methods=['GET', 'POST'])
 def attendance():
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
-    
-    all_logs = []
 
-    # Fetch logs for all terminals
-    for terminal in terminals:
-        ip = terminal["ip"]
-        logs = fetch_attendance_from_terminal(ip, terminal["name"])
-        all_logs.extend(logs)
+    # Fetch logs from the database
+    all_logs = fetch_logs_from_db(start_date, end_date)
 
     # Convert string dates to datetime objects if provided
     if start_date:
-        start_date = datetime.strptime(start_date, '%Y-%m-%d')
+        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()  # Convert to datetime.date
     if end_date:
-        end_date = datetime.strptime(end_date, '%Y-%m-%d')
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()  # Convert to datetime.date
 
     # Filter logs by date range if start_date and end_date are provided
     if start_date or end_date:
         filtered_logs = []
         for log in all_logs:
-            log_time = log['timestamp']
-            if isinstance(log_time, str):
-                log_time = datetime.strptime(log_time, '%Y-%m-%d %H:%M:%S')  # Convert timestamp string to datetime
+            # Check if log['workday'] is already a datetime.date object
+            log_time = log['workday'] if isinstance(log['workday'], date) else datetime.strptime(log['workday'], '%Y-%m-%d').date()
 
-            log_date = log_time.date()
-
-            if start_date and log_date < start_date.date():
+            if start_date and log_time < start_date:
                 continue
-            if end_date and log_date > end_date.date():
+            if end_date and log_time > end_date:
                 continue
 
             filtered_logs.append(log)
@@ -283,32 +411,36 @@ def attendance():
     # Group by user_id and get first clock-in and last clock-out
     user_logs = {}
     for log in all_logs:
-        user_id = log['user_id']
-        status = log['status']
-        timestamp = log['timestamp']
+        user_id = log['userID']
+        # If clockIn and clockOut are datetime objects, extract the time part using .time()
+        timestamp_in = datetime.combine(datetime.today(), log['clockIn'].time()) if log['clockIn'] else None
+        timestamp_out = datetime.combine(datetime.today(), log['clockOut'].time()) if log['clockOut'] else None
 
         if user_id not in user_logs:
             user_logs[user_id] = {
-                'username': log['username'],
+                'employee': log['employee'],
                 'first_clock_in': None,
                 'last_clock_out': None,
                 'clock_in_date': None,
                 'clock_out_date': None
             }
 
-        if status == "Clocked In" and user_logs[user_id]['first_clock_in'] is None:
-            user_logs[user_id]['first_clock_in'] = timestamp
-            user_logs[user_id]['clock_in_date'] = timestamp.date()  # Get only the date part
-        elif status == "Clocked Out":
-            user_logs[user_id]['last_clock_out'] = timestamp
-            user_logs[user_id]['clock_out_date'] = timestamp.date()  # Get only the date part
-    
+        # If clocked in
+        if timestamp_in and user_logs[user_id]['first_clock_in'] is None:
+            user_logs[user_id]['first_clock_in'] = timestamp_in
+            user_logs[user_id]['clock_in_date'] = timestamp_in.date()
+
+        # If clocked out
+        if timestamp_out:
+            user_logs[user_id]['last_clock_out'] = timestamp_out
+            user_logs[user_id]['clock_out_date'] = timestamp_out.date()
+
     # Prepare the list to be displayed in the table
     display_logs = []
     for user_id, user_data in user_logs.items():
         display_logs.append({
             "id": user_id,
-            "user": user_data['username'],
+            "user": user_data['employee'],
             "date": user_data['clock_in_date'] if user_data['clock_in_date'] else "N/A",
             "first_clock_in": user_data['first_clock_in'] if user_data['first_clock_in'] else "Not Clocked In",
             "last_clock_out": user_data['last_clock_out'] if user_data['last_clock_out'] else "Not Clocked Out"
