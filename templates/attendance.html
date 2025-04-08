@@ -110,9 +110,9 @@
             <tr>
                 <td>{{ log.id }}</td>
                 <td>{{ log.user }}</td>
-                <td>{{ log.date }}</td>
-                <td>{{ log.first_clock_in }}</td>
-                <td>{{ log.last_clock_out }}</td>
+                <td>{{ log.date.strftime('%Y-%m-%d') }}</td>  <!-- Format date as 'YYYY-MM-DD' -->
+                <td>{{ log.first_clock_in.strftime('%H:%M') }}</td>
+                <td>{{ log.last_clock_out.strftime('%H:%M') }}</td>
             </tr>
             {% endfor %}
         </tbody>
