@@ -8,12 +8,16 @@ from datetime import datetime, timedelta, time, date
 import socket
 import time
 import mysql.connector
+from dotenv import dotenv_values
+
+# Load the .env file
+config = dotenv_values(".env")
 
 db_config = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': 'root123',
-    'database': 'bdintex_zkteco'
+    "host": config["DB_HOST"],
+    "user": config["DB_USER"],
+    "password": config["DB_PASSWORD"],
+    "database": config["DB_NAME"]
 }
 
 PORT = 4370
@@ -373,6 +377,8 @@ def attendance():
             "last_clock_out": user_data['last_clock_out'] if user_data['last_clock_out'] else "Not Clocked Out"
         })
 
+    # ✅ Sort logs by date descending
+    display_logs.sort(key=lambda x: x['date'], reverse=True)
 
     return render_template('attendance.html', logs=display_logs, start_date=start_date, end_date=end_date)
 
