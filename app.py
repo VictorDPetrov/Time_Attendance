@@ -33,35 +33,41 @@ terminals = [
 from datetime import datetime
 
 def fetch_logs_from_db(start_date=None, end_date=None):
-    # Create a connection to the MySQL database
-    conn = mysql.connector.connect(**db_config)
-    cursor = conn.cursor(dictionary=True)
+    try:
+        # Create a connection to the MySQL database
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
 
-    # Build the base query
-    query = "SELECT userID, employee, workday, clockIn, clockOut FROM logs"
-    filters = []
+        # Build the base query
+        query = "SELECT userID, employee, workday, clockIn, clockOut FROM logs"
+        filters = []
 
-    # If start_date is provided and it's a string, convert it to datetime.date
-    if start_date:
-        if isinstance(start_date, str):  # Check if it's a string
-            start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-        filters.append(f"workday >= '{start_date}'")
+        if start_date:
+            if isinstance(start_date, str):  # Check if it's a string
+                start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+            filters.append(f"workday >= '{start_date}'")
 
-    # If end_date is provided and it's a string, convert it to datetime.date
-    if end_date:
-        if isinstance(end_date, str):  # Check if it's a string
-            end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
-        filters.append(f"workday <= '{end_date}'")
+        if end_date:
+            if isinstance(end_date, str):  # Check if it's a string
+                end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+            filters.append(f"workday <= '{end_date}'")
+        
+        if filters:
+            query += " WHERE " + " AND ".join(filters)
+
+        cursor.execute(query)
+        logs = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return logs
     
-    if filters:
-        query += " WHERE " + " AND ".join(filters)
+    except mysql.connector.Error as e:
+        print(f"Database error: {e}")
+        return {"error": "Database connection failed."}
+    except Exception as e:
+        print(f"Error: {e}")
+        return {"error": "An unexpected error occurred."}
 
-    cursor.execute(query)
-    logs = cursor.fetchall()
-    cursor.close()
-    conn.close()
-
-    return logs
 
 
 
@@ -382,6 +388,26 @@ def attendance():
 
     return render_template('attendance.html', logs=display_logs, start_date=start_date, end_date=end_date)
 
+
+@app.route('/users', methods=['GET', 'POST'])
+def users_page():
+    if request.method == 'POST':
+        # Get the data from the form
+        new_name = request.form.get('name')
+        new_email = request.form.get('email')
+
+        # Create a new user and append to the list (In a real app, save to database)
+        new_user = {
+            "id": len(users) + 1,
+            "name": new_name,
+            "email": new_email
+        }
+        users.append(new_user)
+
+        # Redirect to the GET version of the users page to show the new list
+        return redirect(url_for('users_page'))
+
+    return render_template('users.html', users=users)
 
 if __name__ == '__main__':
     app.run(debug=True)
