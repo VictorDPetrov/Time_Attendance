@@ -35,3 +35,22 @@ h1 {
 .btn-add-user:hover {
     background-color: #0b2b7b;
 }
+
+.danger-button {
+    max-width: 70%;
+    align-items: center;
+    text-align: center;
+    justify-items: center;
+    background-color: #e74c3c;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+}
+
+.danger-button:hover {
+    background-color: #c0392b;
+}

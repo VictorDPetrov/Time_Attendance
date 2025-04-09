@@ -25,6 +25,10 @@
         <a href="/add-employees" class="btn btn-outline-secondary btn-add-user">
             Добави служители
         </a>
+        <br> <br>
+        <form action="{{ url_for('delete_all_employees') }}" method="POST" onsubmit="return confirm('Сигурен ли си, че искаш да изтриеш ВСИЧКИ служители?');">
+            <button type="submit" class="btn-delete-users danger-button">Изтрий всички служители</button>
+        </form>    
     </div>
     <div class="table-wrapper">
         <div class="table-responsive">
