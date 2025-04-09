@@ -1,4 +1,4 @@
-from flask import Flask, render_template, Response, jsonify, redirect, url_for, request
+from flask import Flask, render_template, Response, jsonify, redirect, url_for, request, flash
 from datetime import datetime, timedelta, time, date
 from dotenv import dotenv_values
 from openpyxl import load_workbook
@@ -14,10 +14,12 @@ db_config = {
     "database": config["DB_NAME"]
 }
 
+
 PORT = 4370
 TIMEOUT = .5
 
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY')
 
 terminals = [
     {"name": "Terminal 1", "ip": "192.168.2.221"},
@@ -523,6 +525,93 @@ def add_employee():
             return "Invalid file format. Please upload a CSV or XLSX file."
 
     return render_template('add_employee.html')  # Render the form to upload file if method is GET
+
+@app.route('/upload-employees', methods=['GET'])
+def upload_employees_to_terminals():
+    from zk import ZK, const
+    import mysql.connector
+    import re
+
+    terminals = [
+        {'ip': '192.168.2.221', 'port': 4370},
+        {'ip': '192.168.2.222', 'port': 4370}
+    ]
+
+    try:
+        db = mysql.connector.connect(**db_config)
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT ID, employeeName, cardNumber FROM employees")
+        employees = cursor.fetchall()
+        cursor.close()
+        db.close()
+
+        status_messages = []
+
+        for device in terminals:
+            zk = ZK(device['ip'], port=device['port'], timeout=5)
+            try:
+                conn = zk.connect()
+                conn.disable_device()
+
+                for emp in employees:
+                    try:
+                        # Sanitize and validate input
+                        user_id = str(emp.get('ID'))
+                        uid = int(emp.get('ID'))
+
+                        name = emp.get('employeeName') or 'Unknown'
+                        name = re.sub(r'[^\x00-\x7F]', '', name)[:24]
+
+                        card = str(emp.get('cardNumber') or '')
+                        if card == "0" or not card.isdigit():
+                            card = ''
+
+                        # Print debug info (optional)
+                        print(f"Uploading: UID={uid}, user_id={user_id}, name={name}, card={card}")
+
+                        conn.set_user(
+                            uid=uid,
+                            name=name,
+                            privilege=const.USER_DEFAULT,
+                            password='',
+                            group_id='',
+                            user_id=user_id,
+                            card=card
+                        )
+
+                    except Exception as user_err:
+                        msg = f"❌ Грешка при потребител {emp.get('employeeName')}: {str(user_err)}"
+                        print(msg)
+                        status_messages.append(msg)
+
+                conn.enable_device()
+                conn.disconnect()
+                status_messages.append(f"✔ Успешно качване към {device['ip']}.")
+
+            except Exception as e:
+                status_messages.append(f"❌ Грешка при връзка с {device['ip']}: {str(e)}")
+
+        for msg in status_messages:
+            flash(msg, 'info')
+
+    except Exception as e:
+        flash(f'Грешка при достъп до базата данни: {str(e)}', 'danger')
+
+    return redirect(url_for('users_page'))
+
+@app.route('/test-terminal')
+def test_terminal():
+    from zk import ZK, const
+    zk = ZK('192.168.2.221', port=4370)
+    try:
+        conn = zk.connect()
+        conn.disable_device()
+        conn.set_user(uid=10000, name='Test', privilege=const.USER_DEFAULT, password='', group_id='', user_id='1000000', card='123456')
+        conn.enable_device()
+        conn.disconnect()
+        return "Success"
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 
 @app.route('/delete-all-employees', methods=['POST'])

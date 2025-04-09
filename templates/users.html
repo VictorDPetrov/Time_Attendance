@@ -24,6 +24,10 @@
     <div class="text-end mb-3 addUser">
         <a href="/add-employees" class="btn btn-outline-secondary btn-add-user">
             Добави служители
+        </a> <br>
+        <a href="{{ url_for('upload_employees_to_terminals') }}" class="btn btn-primary"
+            onclick="return confirm('Сигурни ли сте, че искате да качите всички служители на терминалите?')">
+            Качване към терминалите
         </a>
         <br> <br>
         <form action="{{ url_for('delete_all_employees') }}" method="POST"
