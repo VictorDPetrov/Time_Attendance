@@ -1,0 +1,45 @@
+.table-wrapper {
+    max-width: 1000px;
+    margin: auto;
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table th, table td {
+    text-align: left;
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+td.name-column {
+    white-space: normal;
+    max-width: 250px;
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+table tr:hover {
+    background-color: #212529;
+}
+
+@media (max-width: 768px) {
+    table {
+        font-size: 0.9rem;
+    }
+
+    .table-wrapper {
+        padding: 15px;
+    }
+}
+

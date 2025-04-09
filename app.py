@@ -1,7 +1,7 @@
 import io
 import csv
 import json
-from flask import Flask, render_template, Response, jsonify
+from flask import Flask, render_template, Response, jsonify, redirect, url_for
 from zk import ZK
 from flask import jsonify, request
 from datetime import datetime, timedelta, time, date
@@ -9,6 +9,7 @@ import socket
 import time
 import mysql.connector
 from dotenv import dotenv_values
+import requests
 
 # Load the .env file
 config = dotenv_values(".env")
@@ -31,6 +32,16 @@ terminals = [
 ]
 
 from datetime import datetime
+
+def get_card_numbers_from_zkteco():
+    api_url = terminals
+    response = requests.get(api_url)
+    
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return []
+
 
 def fetch_logs_from_db(start_date=None, end_date=None):
     try:
@@ -67,8 +78,6 @@ def fetch_logs_from_db(start_date=None, end_date=None):
     except Exception as e:
         print(f"Error: {e}")
         return {"error": "An unexpected error occurred."}
-
-
 
 
 def check_terminal_status(ip):
@@ -389,25 +398,151 @@ def attendance():
     return render_template('attendance.html', logs=display_logs, start_date=start_date, end_date=end_date)
 
 
-@app.route('/users', methods=['GET', 'POST'])
+import logging
+
+# Set up logging configuration
+logging.basicConfig(level=logging.INFO)
+
+@app.route('/users')
 def users_page():
+    all_users = []
+
+    try:
+        # Connect to the MySQL database using the db_config dictionary
+        conn = mysql.connector.connect(**db_config)
+        if conn is None:
+            print("Failed to connect to the database.")  # Debugging log
+            return render_template('users.html', users=all_users)
+
+        cursor = conn.cursor(dictionary=True)  # Using dictionary cursor to fetch rows as dictionaries
+
+        # Query to fetch user data from the database
+        query = "SELECT ID, employeeName, cardNumber FROM employees ORDER BY ID ASC"
+        cursor.execute(query)
+
+        # Fetch all users from the database
+        users_from_db = cursor.fetchall()
+
+        if users_from_db:
+            print(f"Fetched {len(users_from_db)} users from the database.")  # Debugging log
+        else:
+            print("No users found in the database.")  # Debugging log
+
+        for user in users_from_db:
+            card = str(user['cardNumber'])  # Ensure card is treated as a string
+            card = "N/A" if card == "0" else card  # Replace '0' with 'N/A'
+
+            # Add user data to the list
+            all_users.append({
+                'user_id': user['ID'],
+                'name': user['employeeName'],
+                'card': card
+            })
+
+        # Close the database connection
+        cursor.close()
+        conn.close()
+
+    except Exception as e:
+        print(f"Failed to fetch users: {e}")
+
+    return render_template('users.html', users=all_users)
+
+
+from flask import Flask, render_template, request, redirect, url_for
+import os
+import csv
+from openpyxl import load_workbook  # Import openpyxl for handling .xlsx files
+
+
+UPLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')
+ALLOWED_EXTENSIONS = {'csv', 'xlsx'}
+
+# Ensure the uploads directory exists
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['ALLOWED_EXTENSIONS'] = ALLOWED_EXTENSIONS
+
+# Function to check allowed file extensions (CSV or XLSX)
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+# Route to add employees or upload CSV/XLSX
+@app.route('/add-employees', methods=['GET', 'POST'])
+def add_employee():
     if request.method == 'POST':
-        # Get the data from the form
-        new_name = request.form.get('name')
-        new_email = request.form.get('email')
+        # Check if a file was uploaded
+        if 'file' not in request.files:
+            return "No file part"
 
-        # Create a new user and append to the list (In a real app, save to database)
-        new_user = {
-            "id": len(users) + 1,
-            "name": new_name,
-            "email": new_email
-        }
-        users.append(new_user)
+        file = request.files['file']
 
-        # Redirect to the GET version of the users page to show the new list
-        return redirect(url_for('users_page'))
+        # If no file is selected or file is empty
+        if file.filename == '':
+            return "No selected file"
 
-    return render_template('users.html', users=users)
+        # If the file is allowed
+        if file and allowed_file(file.filename):
+            try:
+                # Save the uploaded file
+                filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+                file.save(filename)
+
+                # Check the file extension and handle accordingly
+                if filename.endswith('.csv'):
+                    users_to_add = []
+                    # Read and process CSV
+                    with open(filename, mode='r') as f:
+                        csv_reader = csv.DictReader(f)
+                        for row in csv_reader:
+                            user_id = row['userID']
+                            employee_name = row['name']
+                            card_number = row['cardNumber']
+                            users_to_add.append((user_id, employee_name, card_number))
+
+                    # Insert users into the database (for CSV)
+                    conn = mysql.connector.connect(**db_config)
+                    cursor = conn.cursor()
+                    query = "INSERT INTO employees (ID, employeeName, cardNumber) VALUES (%s, %s, %s)"
+                    cursor.executemany(query, users_to_add)
+                    conn.commit()
+                    cursor.close()
+                    conn.close()
+
+                elif filename.endswith('.xlsx'):
+                    users_to_add = []
+                    # Load the Excel workbook
+                    wb = load_workbook(filename)
+                    sheet = wb.active
+
+                    # Iterate over the rows in the Excel sheet (skip the header row)
+                    for row in sheet.iter_rows(min_row=2, values_only=True):
+                        user_id, employee_name, card_number = row
+                        users_to_add.append((user_id, employee_name, card_number))
+
+                    # Insert users into the database (for XLSX)
+                    conn = mysql.connector.connect(**db_config)
+                    cursor = conn.cursor()
+                    query = "INSERT INTO employees (ID, employeeName, cardNumber) VALUES (%s, %s, %s)"
+                    cursor.executemany(query, users_to_add)
+                    conn.commit()
+                    cursor.close()
+                    conn.close()
+
+                return redirect(url_for('users_page'))  # Redirect to the user list page after successful upload
+
+            except Exception as e:
+                print(f"Error: {e}")
+                return "There was an error processing the file."
+        
+        else:
+            return "Invalid file format. Please upload a CSV or XLSX file."
+
+    return render_template('add_employee.html')  # Render the form to upload file if method is GET
+
+# Other routes and app configurations
 
 if __name__ == '__main__':
     app.run(debug=True)

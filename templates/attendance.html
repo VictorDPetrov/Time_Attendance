@@ -6,8 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/attendance.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/table.css') }}" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <title>Attendance Logs</title>
+    <title>Bdintex - Присъствена форма</title>
 </head>
 
 <body>
@@ -20,40 +21,47 @@
         <a href="/" class="btn btn-outline-primary mt-2">Начало</a>
     </div>
 
-    <h1>Attendance Logs</h1>
+    <h1>Присъствена форма</h1><br>
 
     <form method="GET" action="/attendance">
-        <label for="start_date">Start Date:</label>
+        <label for="start_date">От дата:</label>
         <input type="text" name="start_date" id="start_date" value="{{ start_date if start_date else '' }}">
-
-        <label for="end_date">End Date:</label>
+        &nbsp; &nbsp;
+        <label for="end_date">До дата:</label>
         <input type="text" name="end_date" id="end_date" value="{{ end_date if end_date else '' }}">
 
-        <button type="submit">Filter</button>
+        <br> <br>
+        <button type="submit">Търсене</button>
     </form>
 
-    <table>
-        <thead>
-            <tr>
-                <th>User ID</th>
-                <th>Employee</th>
-                <th>Date</th>
-                <th>Clock In</th>
-                <th>Clock Out</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for log in logs %}
-            <tr>
-                <td>{{ log.id }}</td>
-                <td>{{ log.user }}</td>
-                <td>{{ log.date.strftime('%Y-%m-%d') }}</td> <!-- Format date as 'YYYY-MM-DD' -->
-                <td>{{ log.first_clock_in.strftime('%H:%M') }}</td>
-                <td>{{ log.last_clock_out.strftime('%H:%M') }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="table-wrapper">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Сл. №</th>
+                        <th>Служител</th>
+                        <th>Дата</th>
+                        <th>Старт на смяна</th>
+                        <th>Край на смяна</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tbody>
+                        {% for log in logs %}
+                        <tr>
+                            <td>{{ log.id }}</td>
+                            <td>{{ log.user }}</td>
+                            <td>{{ log.date.strftime('%Y-%m-%d') }}</td> <!-- Format date as 'YYYY-MM-DD' -->
+                            <td>{{ log.first_clock_in.strftime('%H:%M') }}</td>
+                            <td>{{ log.last_clock_out.strftime('%H:%M') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </tbody>
+            </table>
+        </div>
+    </div>
 
     <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
