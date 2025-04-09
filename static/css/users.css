@@ -1,0 +1,37 @@
+body {
+    background-color: #f8f9fa;
+    padding-top: 50px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.logo {
+    display: block;
+    margin: 20px auto;
+    cursor: pointer;
+    width: 120px;
+}
+
+.addUser {
+    max-width: 30%;
+    align-items: center;
+    text-align: center;
+    justify-items: center;
+}
+
+.btn-add-user {
+    padding: 8px 16px;
+    background-color: #1244C6;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-add-user:hover {
+    background-color: #0b2b7b;
+}

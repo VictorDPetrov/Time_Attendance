@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/users.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/table.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}" />
+    <title>Bdintex - Служители</title>
+</head>
+
+<body class="container">
+    <div class="header" style="text-align: center; margin: 20px 0;">
+        <a href="/">
+            <img src="{{ url_for('static', filename='images/bdintexLogo.png') }}" alt="Bdintex Logo" class="logo"
+                style="max-height: 80px;" />
+        </a>
+        <br />
+        <a href="/" class="btn btn-outline-primary mt-2">Начало</a>
+    </div>
+
+    <h1>Служители</h1>
+    <div class="text-end mb-3 addUser">
+        <a href="/add-employees" class="btn btn-outline-secondary btn-add-user">
+            Добави служители
+        </a>
+    </div>
+    <div class="table-wrapper">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Сл. №</th>
+                        <th>Имена</th>
+                        <th>Номер на карта</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ user.user_id }}</td>
+                        <td>{{ user.name }}</td>
+                        <td>{{ user.card }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
+</body>
+
+</html>
