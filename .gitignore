@@ -12,4 +12,4 @@ venv/
 .vscode/
 
 # Ignore CSV file
-employees.csv
+uploads/
