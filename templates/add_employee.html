@@ -1,24 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Add Employees - Bulk Upload</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/addEmployee.css') }}">
+    <title>Bdintex - Добавяне на служители</title>
 </head>
+
 <body>
 
-<div class="form-wrapper">
-    <h2>Bulk Upload Employees</h2>
-    <form action="{{ url_for('add_employee') }}" method="POST" enctype="multipart/form-data">
-        <div class="form-group">
-            <label for="file">Upload CSV or XLSX File</label>
-            <input type="file" id="file" name="file" required>
-        </div>
+    <div class="form-wrapper">
+        <h2>Добавяне на служители</h2>
+        <form action="{{ url_for('add_employee') }}" method="POST" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="file">Качете CSV или XLSX файл</label>
+                <input type="file" id="file" name="file" required>
+            </div>
 
-        <button type="submit">Upload File</button>
-    </form>
-</div>
+            <button type="submit" class="btnSubmit">Добави служители</button>
+        </form>
+    </div>
 
 </body>
+
 </html>

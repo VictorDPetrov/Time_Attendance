@@ -36,7 +36,7 @@
 
     <div class="table-wrapper">
         <div class="table-responsive">
-            <table class="table table-bordered table-hover align-middle">
+            <table class="table table-bordered table-hover align-middle text-center">
                 <thead class="table-dark">
                     <tr>
                         <th>Сл. №</th>
@@ -52,7 +52,7 @@
                         <tr>
                             <td>{{ log.id }}</td>
                             <td>{{ log.user }}</td>
-                            <td>{{ log.date.strftime('%Y-%m-%d') }}</td> <!-- Format date as 'YYYY-MM-DD' -->
+                            <td>{{ log.date.strftime('%Y-%m-%d') }}</td>
                             <td>{{ log.first_clock_in.strftime('%H:%M') }}</td>
                             <td>{{ log.last_clock_out.strftime('%H:%M') }}</td>
                         </tr>
