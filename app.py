@@ -542,6 +542,23 @@ def add_employee():
 
     return render_template('add_employee.html')  # Render the form to upload file if method is GET
 
+
+@app.route('/delete-all-employees', methods=['POST'])
+def delete_all_employees():
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+
+        cursor.execute("DELETE FROM employees")
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+        return redirect(url_for('users_page'))  # или друга страница, ако искаш
+
+    except Exception as e:
+        return f"Error: {str(e)}", 500
+
 # Other routes and app configurations
 
 if __name__ == '__main__':
