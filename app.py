@@ -1,17 +1,10 @@
-import io
-import csv
-import json
-from flask import Flask, render_template, Response, jsonify, redirect, url_for
-from zk import ZK
-from flask import jsonify, request
+from flask import Flask, render_template, Response, jsonify, redirect, url_for, request
 from datetime import datetime, timedelta, time, date
-import socket
-import time
-import mysql.connector
 from dotenv import dotenv_values
-import requests
+from openpyxl import load_workbook
+import io, os, csv, json, socket, time, mysql.connector, requests, logging
+from zk import ZK
 
-# Load the .env file
 config = dotenv_values(".env")
 
 db_config = {
@@ -31,7 +24,21 @@ terminals = [
     {"name": "Terminal 2", "ip": "192.168.2.222"},
 ]
 
-from datetime import datetime
+logging.basicConfig(level=logging.INFO)
+
+UPLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')
+ALLOWED_EXTENSIONS = {'csv', 'xlsx'}
+
+# Ensure the uploads directory exists
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['ALLOWED_EXTENSIONS'] = ALLOWED_EXTENSIONS
+
+# Function to check allowed file extensions (CSV or XLSX)
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 def get_card_numbers_from_zkteco():
     api_url = terminals
@@ -79,7 +86,6 @@ def fetch_logs_from_db(start_date=None, end_date=None):
         print(f"Error: {e}")
         return {"error": "An unexpected error occurred."}
 
-
 def check_terminal_status(ip):
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -106,78 +112,7 @@ def get_connection(ip):
     except Exception as e:
         print(f"Error connecting to {ip}: {e}")
         return None
-
-@app.route('/api/ping', methods=['POST'])
-def api_ping():
-    ip = request.json.get('ip')
-    conn = get_connection(ip)
-    if conn:
-        try:
-            conn.disconnect()
-            return jsonify({"success": True, "message": "Ping successful"})
-        except:
-            return jsonify({"success": False, "message": "Ping failed"})
-    return jsonify({"success": False, "message": "Device offline"})
-
-@app.route('/api/reboot', methods=['POST'])
-def reboot_terminal():
-    try:
-        data = request.get_json()  # Get the JSON data from the request body
-        ip = data.get("ip")  # Extract the IP address from the data
-
-        if not ip:
-            return jsonify({"success": False, "message": "IP address is required."}), 400
-
-        # Check if the terminal is online (ping it)
-        if not check_terminal_status(ip):
-            return jsonify({"success": False, "message": "Device is offline, unable to reboot."}), 400
-
-        # Proceed with the reboot process if the device is online
-        conn = get_connection(ip)
-        if conn:
-            try:
-                conn.restart()  # Restart the terminal
-                return jsonify({"success": True, "message": f"Device at {ip} restarted successfully."})
-            except Exception as e:
-                print(f"Error restarting device {ip}: {e}")
-                return jsonify({"success": False, "message": f"Failed to restart device at {ip}."}), 500
-        else:
-            return jsonify({"success": False, "message": f"Unable to connect to {ip}."}), 500
-
-    except Exception as e:
-        print(f"Error rebooting device {ip}: {e}")
-        return jsonify({"success": False, "message": "Failed to restart device."}), 500
-
-@app.route('/api/set_time', methods=['POST'])
-def api_set_time():
-    ip = request.json.get('ip')
-    conn = get_connection(ip)
-    if conn:
-        try:
-            conn.set_time(datetime.now())
-            conn.disconnect()
-            return jsonify({"success": True, "message": "Time synced successfully"})
-        except:
-            return jsonify({"success": False, "message": "Set time failed"})
-    return jsonify({"success": False, "message": "Device offline"})
-
-@app.route('/api/get_time', methods=['POST'])
-def api_get_time():
-    ip = request.json.get('ip')
-    conn = get_connection(ip)
-    if conn:
-        try:
-            current_time = conn.get_time()
-            conn.disconnect()
-            return jsonify({"success": True, "time": current_time.strftime('%Y-%m-%d %H:%M:%S')})
-        except:
-            return jsonify({"success": False, "message": "Failed to get time"})
-    return jsonify({"success": False, "message": "Device offline"})
-
-@app.route('/api/refresh', methods=['POST'])
-def api_refresh():
-    return jsonify({"success": True})  # We’ll reload the page on frontend instead
-
+    
 def fetch_attendance_from_terminal(ip, label):
     zk = ZK(ip, port=PORT, timeout=TIMEOUT, password=0, force_udp=False, ommit_ping=True)
     logs = []
@@ -218,42 +153,81 @@ def fetch_attendance_from_terminal(ip, label):
         })
     return logs
 
-@app.route('/export_csv')
-def export_csv():
-    all_logs = []
-    for terminal in terminals:
-        logs = fetch_attendance_from_terminal(terminal["ip"], terminal["name"])
-        all_logs.extend(logs)
+@app.route('/api/ping', methods=['POST'])
+def api_ping():
+    ip = request.json.get('ip')
+    conn = get_connection(ip)
+    if conn:
+        try:
+            conn.disconnect()
+            return jsonify({"success": True, "message": "Ping successful"})
+        except:
+            return jsonify({"success": False, "message": "Ping failed"})
+    return jsonify({"success": False, "message": "Device offline"})
 
-    fieldnames = ['terminal', 'user_id', 'username', 'timestamp', 'status']
 
-    def generate():
-        output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=fieldnames)
-        writer.writeheader()
+@app.route('/api/reboot', methods=['POST'])
+def reboot_terminal():
+    try:
+        data = request.get_json()  # Get the JSON data from the request body
+        ip = data.get("ip")  # Extract the IP address from the data
 
-        for log in all_logs:
-            log['timestamp'] = log['timestamp'].strftime('%Y-%m-%d %H:%M:%S') if hasattr(log['timestamp'], 'strftime') else log['timestamp']
-            writer.writerow(log)
+        if not ip:
+            return jsonify({"success": False, "message": "IP address is required."}), 400
 
-        output.seek(0)
-        return output.getvalue()
+        # Check if the terminal is online (ping it)
+        if not check_terminal_status(ip):
+            return jsonify({"success": False, "message": "Device is offline, unable to reboot."}), 400
 
-    return Response(generate(), mimetype='text/csv', headers={"Content-Disposition": "attachment;filename=attendance_logs.csv"})
+        # Proceed with the reboot process if the device is online
+        conn = get_connection(ip)
+        if conn:
+            try:
+                conn.restart()  # Restart the terminal
+                return jsonify({"success": True, "message": f"Device at {ip} restarted successfully."})
+            except Exception as e:
+                print(f"Error restarting device {ip}: {e}")
+                return jsonify({"success": False, "message": f"Failed to restart device at {ip}."}), 500
+        else:
+            return jsonify({"success": False, "message": f"Unable to connect to {ip}."}), 500
 
-@app.route('/export_json')
-def export_json():
-    all_logs = []
-    for terminal in terminals:
-        logs = fetch_attendance_from_terminal(terminal["ip"], terminal["name"])
-        all_logs.extend(logs)
+    except Exception as e:
+        print(f"Error rebooting device {ip}: {e}")
+        return jsonify({"success": False, "message": "Failed to restart device."}), 500
 
-    # Convert datetime objects to strings
-    for log in all_logs:
-        if hasattr(log['timestamp'], 'strftime'):
-            log['timestamp'] = log['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
 
-    return jsonify(all_logs)
+@app.route('/api/set_time', methods=['POST'])
+def api_set_time():
+    ip = request.json.get('ip')
+    conn = get_connection(ip)
+    if conn:
+        try:
+            conn.set_time(datetime.now())
+            conn.disconnect()
+            return jsonify({"success": True, "message": "Time synced successfully"})
+        except:
+            return jsonify({"success": False, "message": "Set time failed"})
+    return jsonify({"success": False, "message": "Device offline"})
+
+
+@app.route('/api/get_time', methods=['POST'])
+def api_get_time():
+    ip = request.json.get('ip')
+    conn = get_connection(ip)
+    if conn:
+        try:
+            current_time = conn.get_time()
+            conn.disconnect()
+            return jsonify({"success": True, "time": current_time.strftime('%Y-%m-%d %H:%M:%S')})
+        except:
+            return jsonify({"success": False, "message": "Failed to get time"})
+    return jsonify({"success": False, "message": "Device offline"})
+
+
+@app.route('/api/refresh', methods=['POST'])
+def api_refresh():
+    return jsonify({"success": True})  # We’ll reload the page on frontend instead
+
 
 @app.route('/')
 def index():
@@ -295,9 +269,9 @@ def index():
             all_logs.append({
                 "terminal": terminal["name"],
                 "user_id": "-",
-                "username": "Device Offline",
+                "username": "Терминала е офлайн",
                 "timestamp": "-",
-                "status": "Offline"
+                "status": "Офлайн"
             })
 
     all_logs.sort(key=lambda x: x['timestamp'] if x['timestamp'] != "-" else datetime.min, reverse=True)
@@ -305,11 +279,45 @@ def index():
     return render_template('index.html', logs=all_logs, terminals=enriched_terminals, terminal_time=current_terminal_time)
 
 
-# Route to display attendance
-from datetime import datetime, time
+@app.route('/export_csv')
+def export_csv():
+    all_logs = []
+    for terminal in terminals:
+        logs = fetch_attendance_from_terminal(terminal["ip"], terminal["name"])
+        all_logs.extend(logs)
 
-from datetime import datetime
+    fieldnames = ['terminal', 'user_id', 'username', 'timestamp', 'status']
 
+    def generate():
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for log in all_logs:
+            log['timestamp'] = log['timestamp'].strftime('%Y-%m-%d %H:%M:%S') if hasattr(log['timestamp'], 'strftime') else log['timestamp']
+            writer.writerow(log)
+
+        output.seek(0)
+        return output.getvalue()
+
+    return Response(generate(), mimetype='text/csv', headers={"Content-Disposition": "attachment;filename=attendance_logs.csv"})
+
+
+@app.route('/export_json')
+def export_json():
+    all_logs = []
+    for terminal in terminals:
+        logs = fetch_attendance_from_terminal(terminal["ip"], terminal["name"])
+        all_logs.extend(logs)
+
+    # Convert datetime objects to strings
+    for log in all_logs:
+        if hasattr(log['timestamp'], 'strftime'):
+            log['timestamp'] = log['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
+
+    return jsonify(all_logs)
+
+from datetime import time # Needs to be imported again before loading the page
 
 @app.route('/attendance', methods=['GET', 'POST'])
 def attendance():
@@ -398,11 +406,6 @@ def attendance():
     return render_template('attendance.html', logs=display_logs, start_date=start_date, end_date=end_date)
 
 
-import logging
-
-# Set up logging configuration
-logging.basicConfig(level=logging.INFO)
-
 @app.route('/users')
 def users_page():
     all_users = []
@@ -447,27 +450,6 @@ def users_page():
         print(f"Failed to fetch users: {e}")
 
     return render_template('users.html', users=all_users)
-
-
-from flask import Flask, render_template, request, redirect, url_for
-import os
-import csv
-from openpyxl import load_workbook  # Import openpyxl for handling .xlsx files
-
-
-UPLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')
-ALLOWED_EXTENSIONS = {'csv', 'xlsx'}
-
-# Ensure the uploads directory exists
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['ALLOWED_EXTENSIONS'] = ALLOWED_EXTENSIONS
-
-# Function to check allowed file extensions (CSV or XLSX)
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 # Route to add employees or upload CSV/XLSX
 @app.route('/add-employees', methods=['GET', 'POST'])
@@ -558,8 +540,6 @@ def delete_all_employees():
 
     except Exception as e:
         return f"Error: {str(e)}", 500
-
-# Other routes and app configurations
 
 if __name__ == '__main__':
     app.run(debug=True)
