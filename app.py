@@ -1,4 +1,4 @@
-from flask import Flask, render_template, Response, jsonify, redirect, url_for, request
+from flask import Flask, render_template, Response, jsonify, redirect, url_for, request, flash
 from datetime import datetime, timedelta, time, date
 from dotenv import dotenv_values
 from openpyxl import load_workbook
@@ -14,10 +14,12 @@ db_config = {
     "database": config["DB_NAME"]
 }
 
+
 PORT = 4370
 TIMEOUT = .5
 
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY')
 
 terminals = [
     {"name": "Terminal 1", "ip": "192.168.2.221"},
@@ -524,19 +526,160 @@ def add_employee():
 
     return render_template('add_employee.html')  # Render the form to upload file if method is GET
 
+@app.route('/upload-employees', methods=['GET'])
+def upload_employees_to_terminals():
+    from zk import ZK, const
+    import mysql.connector
+    import re
+
+    terminals = [
+        {'ip': '192.168.2.221', 'port': 4370},
+        {'ip': '192.168.2.222', 'port': 4370}
+    ]
+
+    try:
+        db = mysql.connector.connect(**db_config)
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT ID, employeeName, cardNumber FROM employees")
+        employees = cursor.fetchall()
+        cursor.close()
+        db.close()
+
+        status_messages = []
+
+        for device in terminals:
+            zk = ZK(device['ip'], port=device['port'], timeout=5)
+            try:
+                conn = zk.connect()
+                conn.disable_device()
+
+                for emp in employees:
+                    try:
+                        # Sanitize and validate input
+                        user_id = str(emp.get('ID'))
+                        uid = int(emp.get('ID'))
+
+                        name = emp.get('employeeName') or 'Unknown'
+                        name = re.sub(r'[^\x00-\x7F]', '', name)[:24]
+
+                        card = str(emp.get('cardNumber') or '')
+                        if card == "0" or not card.isdigit():
+                            card = ''
+
+                        # Print debug info (optional)
+                        print(f"Uploading: UID={uid}, user_id={user_id}, name={name}, card={card}")
+
+                        conn.set_user(
+                            uid=uid,
+                            name=name,
+                            privilege=const.USER_DEFAULT,
+                            password='',
+                            group_id='',
+                            user_id=user_id,
+                            card=card
+                        )
+
+                    except Exception as user_err:
+                        msg = f"❌ Грешка при потребител {emp.get('employeeName')}: {str(user_err)}"
+                        print(msg)
+                        status_messages.append(msg)
+
+                conn.enable_device()
+                conn.disconnect()
+                status_messages.append(f"✔ Успешно качване към {device['ip']}.")
+
+            except Exception as e:
+                status_messages.append(f"❌ Грешка при връзка с {device['ip']}: {str(e)}")
+
+        for msg in status_messages:
+            flash(msg, 'info')
+
+    except Exception as e:
+        flash(f'Грешка при достъп до базата данни: {str(e)}', 'danger')
+
+    return redirect(url_for('users_page'))
+
+@app.route('/test-terminal')
+def test_terminal():
+    from zk import ZK, const
+    zk = ZK('192.168.2.221', port=4370)
+    try:
+        conn = zk.connect()
+        conn.disable_device()
+        conn.set_user(uid=10000, name='Test', privilege=const.USER_DEFAULT, password='', group_id='', user_id='1000000', card='123456')
+        conn.enable_device()
+        conn.disconnect()
+        return "Success"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+def clear_all_users_from_device(ip, port=4370):
+    zk = ZK(ip, port=port, timeout=5, force_udp=True)
+    try:
+        conn = zk.connect()
+        conn.disable_device()
+        users = conn.get_users()
+        
+        for user in users:
+            if user.uid > 1:  # Avoid deleting admin user (UID 0 or 1)
+                conn.delete_user(uid=user.uid)
+
+        conn.enable_device()
+        conn.disconnect()
+        print(f"[INFO] Cleared users from {ip}")
+        return True
+    except Exception as e:
+        print(f"[ERROR] Could not clear users from {ip}: {e}")
+        return False
 
 @app.route('/delete-all-employees', methods=['POST'])
 def delete_all_employees():
     try:
+        # Step 1: Clear all users from each terminal
+        for terminal in terminals:
+            success = clear_all_users_from_device(terminal["ip"])
+            if not success:
+                return f"Failed to clear users from {terminal['name']} ({terminal['ip']})", 500
+
+        # Step 2: Clear from the database
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-
         cursor.execute("DELETE FROM employees")
         conn.commit()
 
         cursor.close()
         conn.close()
-        return redirect(url_for('users_page'))  # или друга страница, ако искаш
+
+        return redirect(url_for('users_page'))
+
+    except Exception as e:
+        return f"Error: {str(e)}", 500
+    
+def clear_logs_from_device(ip, port=4370):
+    zk = ZK(ip, port=port, timeout=5, force_udp=True)
+    try:
+        conn = zk.connect()
+        conn.disable_device()
+        conn.clear_attendance()  # Clears all attendance logs
+        conn.enable_device()
+        conn.disconnect()
+        print(f"[INFO] Logs cleared from {ip}")
+        return True
+    except Exception as e:
+        print(f"[ERROR] Could not clear logs from {ip}: {e}")
+        return False
+
+@app.route('/delete-logs', methods=['POST'])
+def delete_logs():
+    try:
+        # Step 1: Clear logs from each terminal
+        for terminal in terminals:
+            success = clear_logs_from_device(terminal["ip"])
+            if not success:
+                return f"Failed to clear logs from {terminal['name']} ({terminal['ip']})", 500
+
+        return redirect(url_for('index'))  # Or any page you prefer after logs are deleted
 
     except Exception as e:
         return f"Error: {str(e)}", 500
