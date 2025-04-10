@@ -41,3 +41,24 @@ button {
 button:hover {
     background-color: #0b2b7b;
 }
+
+.export-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.btn-export {
+    background-color: #1244C6;
+    color: #FFF;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    font-weight: 500;
+    padding: 8px 16px;
+    transition: 0.2s ease-in-out;
+}
+
+.btn-export:hover {
+    color: #FFF;
+    background-color: #0f36A1;
+}
