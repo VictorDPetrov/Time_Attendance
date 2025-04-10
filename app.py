@@ -52,33 +52,42 @@ def get_card_numbers_from_zkteco():
         return []
 
 
+import mysql.connector
+from datetime import datetime
+
 def fetch_logs_from_db(start_date=None, end_date=None):
     try:
         # Create a connection to the MySQL database
         conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-
-        # Build the base query
-        query = "SELECT userID, employee, workday, clockIn, clockOut FROM logs"
-        filters = []
-
-        if start_date:
-            if isinstance(start_date, str):  # Check if it's a string
-                start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-            filters.append(f"workday >= '{start_date}'")
-
-        if end_date:
-            if isinstance(end_date, str):  # Check if it's a string
-                end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
-            filters.append(f"workday <= '{end_date}'")
         
-        if filters:
-            query += " WHERE " + " AND ".join(filters)
+        # Using 'with' to ensure cursor and connection are properly closed
+        with conn.cursor(dictionary=True) as cursor:
+            # Base query
+            query = "SELECT userID, employee, workday, clockIn, clockOut FROM logs"
+            filters = []
+            params = []
 
-        cursor.execute(query)
-        logs = cursor.fetchall()
-        cursor.close()
-        conn.close()
+            if start_date:
+                if isinstance(start_date, str):  # Check if it's a string
+                    start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+                filters.append("workday >= %s")
+                params.append(start_date)
+
+            if end_date:
+                if isinstance(end_date, str):  # Check if it's a string
+                    end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+                filters.append("workday <= %s")
+                params.append(end_date)
+
+            if filters:
+                query += " WHERE " + " AND ".join(filters)
+
+            # Execute the query with parameters to prevent SQL injection
+            cursor.execute(query, tuple(params))
+            logs = cursor.fetchall()
+
+        conn.close()  # Close connection after the 'with' block is done
+
         return logs
     
     except mysql.connector.Error as e:
@@ -154,6 +163,40 @@ def fetch_attendance_from_terminal(ip, label):
             "status": "Offline"
         })
     return logs
+
+def clear_all_users_from_device(ip, port=4370):
+    zk = ZK(ip, port=port, timeout=5, force_udp=True)
+    try:
+        conn = zk.connect()
+        conn.disable_device()
+        users = conn.get_users()
+        
+        for user in users:
+            if user.uid > 1:  # Avoid deleting admin user (UID 0 or 1)
+                conn.delete_user(uid=user.uid)
+
+        conn.enable_device()
+        conn.disconnect()
+        print(f"[INFO] Cleared users from {ip}")
+        return True
+    except Exception as e:
+        print(f"[ERROR] Could not clear users from {ip}: {e}")
+        return False
+    
+def clear_logs_from_device(ip, port=4370):
+    zk = ZK(ip, port=port, timeout=5, force_udp=True)
+    try:
+        conn = zk.connect()
+        conn.disable_device()
+        conn.clear_attendance()  # Clears all attendance logs
+        conn.enable_device()
+        conn.disconnect()
+        print(f"[INFO] Logs cleared from {ip}")
+        return True
+    except Exception as e:
+        print(f"[ERROR] Could not clear logs from {ip}: {e}")
+        return False
+
 
 @app.route('/api/ping', methods=['POST'])
 def api_ping():
@@ -321,6 +364,8 @@ def export_json():
 
 from datetime import time # Needs to be imported again before loading the page
 
+from datetime import datetime, timedelta, date, time
+
 @app.route('/attendance', methods=['GET', 'POST'])
 def attendance():
     start_date = request.args.get('start_date', None)
@@ -351,7 +396,6 @@ def attendance():
         all_logs = filtered_logs
 
     # Group by user_id and get first clock-in and last clock-out
-    # Group by user_id AND workday to handle multiple days per user
     user_logs = {}
     for log in all_logs:
         user_id = log['userID']
@@ -361,6 +405,7 @@ def attendance():
         timestamp_in = None
         timestamp_out = None
 
+        # Convert clock-in and clock-out to datetime objects if they are time or timedelta
         if isinstance(log['clockIn'], time):
             timestamp_in = datetime.combine(datetime.today(), log['clockIn']) if log['clockIn'] else None
         elif isinstance(log['clockIn'], timedelta):
@@ -389,23 +434,164 @@ def attendance():
             if user_logs[key]['last_clock_out'] is None or timestamp_out > user_logs[key]['last_clock_out']:
                 user_logs[key]['last_clock_out'] = timestamp_out
 
-
     # Prepare the list to be displayed in the table
-# Prepare the list to be displayed in the table
     display_logs = []
     for (user_id, workday), user_data in user_logs.items():
         display_logs.append({
             "id": user_id,
             "user": user_data['employee'],
             "date": user_data['workday'],
-            "first_clock_in": user_data['first_clock_in'] if user_data['first_clock_in'] else "Not Clocked In",
-            "last_clock_out": user_data['last_clock_out'] if user_data['last_clock_out'] else "Not Clocked Out"
+            "first_clock_in": user_data['first_clock_in'].strftime('%H:%M') if user_data['first_clock_in'] else "Not Clocked In",
+            "last_clock_out": user_data['last_clock_out'].strftime('%H:%M') if user_data['last_clock_out'] else "Not Clocked Out"
         })
 
     # ✅ Sort logs by date descending
     display_logs.sort(key=lambda x: x['date'], reverse=True)
 
     return render_template('attendance.html', logs=display_logs, start_date=start_date, end_date=end_date)
+
+@app.route('/scan_card', methods=['POST'])
+def scan_card():
+    try:
+        # Get the data sent by the terminal (from the scan event)
+        data = request.get_json()
+
+        # Extract necessary information
+        user_id = data['userID']
+        employee_name = data['employee']
+        clock_in = data.get('clockIn')  # Assuming clock-in is provided
+        clock_out = data.get('clockOut')  # If applicable
+
+        # Ensure required fields are present
+        if not user_id or not employee_name or not clock_in:
+            return jsonify({"error": "Missing required fields."}), 400
+
+        # Get the current date (workday)
+        workday = datetime.today().date()
+
+        # Connect to the database
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+
+        # Insert log into the database
+        insert_query = """
+        INSERT INTO logs (userID, employee, workday, clockIn, clockOut)
+        VALUES (%s, %s, %s, %s, %s)
+        """
+        cursor.execute(insert_query, (user_id, employee_name, workday, clock_in, clock_out))
+
+        # Commit and close connection
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({"success": "Log added successfully."}), 200
+
+    except mysql.connector.Error as e:
+        print(f"Database error: {e}")
+        return jsonify({"error": "Database connection failed."}), 500
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({"error": "An unexpected error occurred."}), 500
+
+
+import csv
+from flask import Response
+
+@app.route('/export_attendance', methods=['GET'])
+def export_attendance():
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+
+    # Fetch logs from the database or any source
+    all_logs = fetch_logs_from_db(start_date, end_date)
+
+    # Convert string dates to datetime objects if provided
+    if start_date:
+        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+    if end_date:
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+    # Filter logs by date range if start_date and end_date are provided
+    if start_date or end_date:
+        filtered_logs = []
+        for log in all_logs:
+            log_time = log['workday'] if isinstance(log['workday'], date) else datetime.strptime(log['workday'], '%Y-%m-%d').date()
+
+            if start_date and log_time < start_date:
+                continue
+            if end_date and log_time > end_date:
+                continue
+
+            filtered_logs.append(log)
+        all_logs = filtered_logs
+
+    # Group by user_id and get first clock-in and last clock-out
+    user_logs = {}
+    for log in all_logs:
+        user_id = log['userID']
+        workday = log['workday'] if isinstance(log['workday'], date) else datetime.strptime(log['workday'], '%Y-%m-%d').date()
+        key = (user_id, workday)
+
+        timestamp_in = None
+        timestamp_out = None
+
+        if isinstance(log['clockIn'], time):
+            timestamp_in = datetime.combine(datetime.today(), log['clockIn']) if log['clockIn'] else None
+        elif isinstance(log['clockIn'], timedelta):
+            timestamp_in = datetime.combine(datetime.today(), datetime.min.time()) + log['clockIn'] if log['clockIn'] else None
+
+        if isinstance(log['clockOut'], time):
+            timestamp_out = datetime.combine(datetime.today(), log['clockOut']) if log['clockOut'] else None
+        elif isinstance(log['clockOut'], timedelta):
+            timestamp_out = datetime.combine(datetime.today(), datetime.min.time()) + log['clockOut'] if log['clockOut'] else None
+
+        if key not in user_logs:
+            user_logs[key] = {
+                'employee': log['employee'],
+                'first_clock_in': None,
+                'last_clock_out': None,
+                'workday': workday
+            }
+
+        if timestamp_in:
+            if user_logs[key]['first_clock_in'] is None or timestamp_in < user_logs[key]['first_clock_in']:
+                user_logs[key]['first_clock_in'] = timestamp_in
+
+        if timestamp_out:
+            if user_logs[key]['last_clock_out'] is None or timestamp_out > user_logs[key]['last_clock_out']:
+                user_logs[key]['last_clock_out'] = timestamp_out
+
+    # Prepare data for export
+    export_data = []
+    for (user_id, workday), user_data in user_logs.items():
+        export_data.append({
+            "User ID": user_id,
+            "Employee": user_data['employee'],
+            "Date": user_data['workday'],
+            "First Clock-In": user_data['first_clock_in'] if user_data['first_clock_in'] else "Not Clocked In",
+            "Last Clock-Out": user_data['last_clock_out'] if user_data['last_clock_out'] else "Not Clocked Out"
+        })
+
+    # Create a CSV file in memory
+    def generate_csv():
+        # Use a StringIO buffer to write CSV in memory
+        import io
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=["User ID", "Employee", "Date", "First Clock-In", "Last Clock-Out"])
+        writer.writeheader()
+        for row in export_data:
+            writer.writerow(row)
+        output.seek(0)  # Rewind the buffer to the beginning
+        return output
+
+    # Return the CSV file as a response
+    csv_output = generate_csv()
+    return Response(
+        csv_output,
+        mimetype='text/csv',
+        headers={"Content-Disposition": "attachment; filename=attendance_log.csv"}
+    )
 
 
 @app.route('/users')
@@ -532,12 +718,47 @@ def upload_employees_to_terminals():
     import mysql.connector
     import re
 
+    # Define terminals with IP addresses
     terminals = [
-        {'ip': '192.168.2.221', 'port': 4370},
-        {'ip': '192.168.2.222', 'port': 4370}
+        {'ip': '192.168.2.221', 'port': 4370, 'name': 'Terminal 1'},
+        {'ip': '192.168.2.222', 'port': 4370, 'name': 'Terminal 2'}
     ]
 
+    # Function to clear all users from the terminal
+    def clear_all_users_from_device(ip):
+        try:
+            zk = ZK(ip, port=4370, timeout=5)
+            conn = zk.connect()
+            if conn is None:
+                raise Exception(f"Could not connect to terminal {ip}")
+
+            conn.disable_device()
+
+            # Fetch existing users from the terminal
+            users = conn.get_users()
+            if not users:
+                print(f"No users found on terminal {ip}")
+            else:
+                print(f"Deleting users from terminal {ip}...")
+                for user in users:
+                    uid = user.uid  # Access the UID of the user object
+                    print(f"Deleting user UID={uid} from terminal {ip}")
+                    success = conn.delete_user(uid)
+                    if success:
+                        print(f"User UID={uid} deleted successfully.")
+                    else:
+                        print(f"Failed to delete user UID={uid}.")
+
+            conn.enable_device()
+            conn.disconnect()
+            return True
+
+        except Exception as e:
+            print(f"Error deleting users from terminal {ip}: {str(e)}")
+            return False
+
     try:
+        # Step 1: Fetch employees from the database
         db = mysql.connector.connect(**db_config)
         cursor = db.cursor(dictionary=True)
         cursor.execute("SELECT ID, employeeName, cardNumber FROM employees")
@@ -545,11 +766,21 @@ def upload_employees_to_terminals():
         cursor.close()
         db.close()
 
+        # Status messages to store results
         status_messages = []
 
+        # Step 2: Iterate through each terminal
         for device in terminals:
             zk = ZK(device['ip'], port=device['port'], timeout=5)
             try:
+                # Clear all users from the terminal before uploading new users
+                print(f"Attempting to clear existing users from {device['ip']}...")
+                success = clear_all_users_from_device(device['ip'])
+                if not success:
+                    status_messages.append(f"❌ Failed to clear users from {device['name']} ({device['ip']})")
+                    continue  # Skip to next terminal if user deletion fails
+
+                # Step 3: Connect to the terminal and upload new users
                 conn = zk.connect()
                 conn.disable_device()
 
@@ -580,22 +811,23 @@ def upload_employees_to_terminals():
                         )
 
                     except Exception as user_err:
-                        msg = f"❌ Грешка при потребител {emp.get('employeeName')}: {str(user_err)}"
+                        msg = f"❌ Error uploading user {emp.get('employeeName')}: {str(user_err)}"
                         print(msg)
                         status_messages.append(msg)
 
                 conn.enable_device()
                 conn.disconnect()
-                status_messages.append(f"✔ Успешно качване към {device['ip']}.")
+                status_messages.append(f"✔ Successfully uploaded users to {device['ip']}.")
 
             except Exception as e:
-                status_messages.append(f"❌ Грешка при връзка с {device['ip']}: {str(e)}")
+                status_messages.append(f"❌ Error connecting to terminal {device['ip']}: {str(e)}")
 
+        # Flash all status messages
         for msg in status_messages:
             flash(msg, 'info')
 
     except Exception as e:
-        flash(f'Грешка при достъп до базата данни: {str(e)}', 'danger')
+        flash(f'Error accessing the database: {str(e)}', 'danger')
 
     return redirect(url_for('users_page'))
 
@@ -613,38 +845,95 @@ def test_terminal():
     except Exception as e:
         return f"Error: {str(e)}"
 
+@app.route('/fetch-logs', methods=['POST'])
+def fetch_logs():
+    from zk import ZK
+    import mysql.connector
+    from datetime import datetime
 
-def clear_all_users_from_device(ip, port=4370):
-    zk = ZK(ip, port=port, timeout=5, force_udp=True)
+    terminals = [
+        {'ip': '192.168.2.221', 'port': 4370, 'name': 'Terminal 1'},
+        {'ip': '192.168.2.222', 'port': 4370, 'name': 'Terminal 2'}
+    ]
+
     try:
-        conn = zk.connect()
-        conn.disable_device()
-        users = conn.get_users()
-        
-        for user in users:
-            if user.uid > 1:  # Avoid deleting admin user (UID 0 or 1)
-                conn.delete_user(uid=user.uid)
+        # Connect to the database
+        db = mysql.connector.connect(**db_config)
+        cursor = db.cursor()
 
-        conn.enable_device()
-        conn.disconnect()
-        print(f"[INFO] Cleared users from {ip}")
-        return True
+        # Fetch logs from each terminal
+        for device in terminals:
+            zk = ZK(device['ip'], port=device['port'], timeout=5)
+            try:
+                # Connect to the terminal
+                conn = zk.connect()
+                if conn is None:
+                    raise Exception(f"Could not connect to terminal {device['ip']}")
+
+                # Fetch logs from the terminal
+                logs = conn.get_attendance()
+
+                if logs:
+                    # Process and insert logs into the database
+                    for log in logs:
+                        user_id = log.user_id
+
+                        # Handle timestamp conversion
+                        timestamp = log.timestamp  # Assuming log.timestamp is a datetime object
+                        if isinstance(timestamp, str):  # If it's a string, convert it
+                            timestamp = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+                        
+                        workday = timestamp.date()  # Extract workday (date) from the timestamp
+                        clock_in = timestamp.time()  # Extract clock-in time from the timestamp
+                        clock_out = None  # You can update this later if needed
+
+                        # Fetch employee name based on user_id
+                        cursor.execute("SELECT employeeName FROM employees WHERE ID = %s", (user_id,))
+                        employee_name = cursor.fetchone()
+                        if employee_name:
+                            employee = employee_name[0]
+                        else:
+                            employee = 'Unknown'
+
+                        # Insert log into the database
+                        cursor.execute(
+                            """
+                            INSERT INTO logs (userID, employee, workday, clockIn, clockOut)
+                            VALUES (%s, %s, %s, %s, %s)
+                            """,
+                            (user_id, employee, workday, clock_in, clock_out)
+                        )
+                    db.commit()
+                    print(f"Logs successfully fetched from terminal {device['ip']}.")
+                else:
+                    print(f"No logs found on terminal {device['ip']}.")
+                
+                conn.disconnect()
+
+            except Exception as e:
+                print(f"Error fetching logs from terminal {device['ip']}: {str(e)}")
+
+        # Close the database connection
+        cursor.close()
+        db.close()
+
+        # Flash a success message and redirect
+        flash('Logs successfully fetched and saved to the database.', 'success')
+
     except Exception as e:
-        print(f"[ERROR] Could not clear users from {ip}: {e}")
-        return False
+        flash(f'Error: {str(e)}', 'danger')
+
+    return redirect(url_for('users_page'))
+
 
 @app.route('/delete-all-employees', methods=['POST'])
 def delete_all_employees():
     try:
-        # Step 1: Clear all users from each terminal
-        for terminal in terminals:
-            success = clear_all_users_from_device(terminal["ip"])
-            if not success:
-                return f"Failed to clear users from {terminal['name']} ({terminal['ip']})", 500
-
-        # Step 2: Clear from the database
+        # Step 1: Clear from the database
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
+
+        # Delete all employees from the database
         cursor.execute("DELETE FROM employees")
         conn.commit()
 
@@ -655,20 +944,7 @@ def delete_all_employees():
 
     except Exception as e:
         return f"Error: {str(e)}", 500
-    
-def clear_logs_from_device(ip, port=4370):
-    zk = ZK(ip, port=port, timeout=5, force_udp=True)
-    try:
-        conn = zk.connect()
-        conn.disable_device()
-        conn.clear_attendance()  # Clears all attendance logs
-        conn.enable_device()
-        conn.disconnect()
-        print(f"[INFO] Logs cleared from {ip}")
-        return True
-    except Exception as e:
-        print(f"[ERROR] Could not clear logs from {ip}: {e}")
-        return False
+
 
 @app.route('/delete-logs', methods=['POST'])
 def delete_logs():

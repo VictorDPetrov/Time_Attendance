@@ -34,6 +34,14 @@
         <button type="submit">Търсене</button>
     </form>
 
+    <div class="export-container">
+        <a href="/export_attendance" class="btn btn-export">Експортиране на данни</a>
+        <form action="{{ url_for('fetch_logs') }}" method="POST">
+            <button type="submit" class="btn btn-primary">Fetch Logs</button>
+        </form>    
+    </div>
+
+        
     <div class="table-wrapper">
         <div class="table-responsive">
             <table class="table table-bordered table-hover align-middle text-center">
@@ -53,8 +61,8 @@
                             <td>{{ log.id }}</td>
                             <td>{{ log.user }}</td>
                             <td>{{ log.date.strftime('%Y-%m-%d') }}</td>
-                            <td>{{ log.first_clock_in.strftime('%H:%M') }}</td>
-                            <td>{{ log.last_clock_out.strftime('%H:%M') }}</td>
+                            <td>{{ log.first_clock_in }}</td>
+                            <td>{{ log.last_clock_out }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
