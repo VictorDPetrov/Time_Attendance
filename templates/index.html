@@ -56,7 +56,7 @@
       </div>
     </div>
 
-    
+
     <div class="text-center">
       <a href="/attendance" class="btn btn-outline-secondary btn-check-attendance">
         Проверка - Присъствие
@@ -67,6 +67,9 @@
       &nbsp;
       <a href="{{ url_for('export_csv') }}" class="btn btn-export">Експортирай към CSV</a> &nbsp;
       <a href="{{ url_for('export_json') }}" class="btn btn-export">Експортирай към JSON</a> &nbsp;
+      <form action="{{ url_for('delete_logs') }}" method="POST">
+        <button type="submit" class="btn btn-danger">Изтрий Дневник</button>
+      </form>
     </div>
 
     <h1 class="text-center attendance">Дневник от всички терминали за работно време</h1> <br>

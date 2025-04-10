@@ -61,6 +61,14 @@ body {
     color: #fff;
 }
 
+.btn-danger {
+    margin-top: 15px;
+    margin-bottom: 15px;
+    font-weight: 500;
+    padding: 8px 16px;
+    transition: 0.2s ease-in-out;
+}
+
 footer {
     background-color: #1244C6;
     color: white;

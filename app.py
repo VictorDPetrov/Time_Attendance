@@ -614,18 +614,72 @@ def test_terminal():
         return f"Error: {str(e)}"
 
 
+def clear_all_users_from_device(ip, port=4370):
+    zk = ZK(ip, port=port, timeout=5, force_udp=True)
+    try:
+        conn = zk.connect()
+        conn.disable_device()
+        users = conn.get_users()
+        
+        for user in users:
+            if user.uid > 1:  # Avoid deleting admin user (UID 0 or 1)
+                conn.delete_user(uid=user.uid)
+
+        conn.enable_device()
+        conn.disconnect()
+        print(f"[INFO] Cleared users from {ip}")
+        return True
+    except Exception as e:
+        print(f"[ERROR] Could not clear users from {ip}: {e}")
+        return False
+
 @app.route('/delete-all-employees', methods=['POST'])
 def delete_all_employees():
     try:
+        # Step 1: Clear all users from each terminal
+        for terminal in terminals:
+            success = clear_all_users_from_device(terminal["ip"])
+            if not success:
+                return f"Failed to clear users from {terminal['name']} ({terminal['ip']})", 500
+
+        # Step 2: Clear from the database
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-
         cursor.execute("DELETE FROM employees")
         conn.commit()
 
         cursor.close()
         conn.close()
-        return redirect(url_for('users_page'))  # или друга страница, ако искаш
+
+        return redirect(url_for('users_page'))
+
+    except Exception as e:
+        return f"Error: {str(e)}", 500
+    
+def clear_logs_from_device(ip, port=4370):
+    zk = ZK(ip, port=port, timeout=5, force_udp=True)
+    try:
+        conn = zk.connect()
+        conn.disable_device()
+        conn.clear_attendance()  # Clears all attendance logs
+        conn.enable_device()
+        conn.disconnect()
+        print(f"[INFO] Logs cleared from {ip}")
+        return True
+    except Exception as e:
+        print(f"[ERROR] Could not clear logs from {ip}: {e}")
+        return False
+
+@app.route('/delete-logs', methods=['POST'])
+def delete_logs():
+    try:
+        # Step 1: Clear logs from each terminal
+        for terminal in terminals:
+            success = clear_logs_from_device(terminal["ip"])
+            if not success:
+                return f"Failed to clear logs from {terminal['name']} ({terminal['ip']})", 500
+
+        return redirect(url_for('index'))  # Or any page you prefer after logs are deleted
 
     except Exception as e:
         return f"Error: {str(e)}", 500
