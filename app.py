@@ -923,7 +923,7 @@ def fetch_logs():
     except Exception as e:
         flash(f'Error: {str(e)}', 'danger')
 
-    return redirect(url_for('users_page'))
+    return redirect(url_for('attendance'))
 
 
 @app.route('/delete-all-employees', methods=['POST'])

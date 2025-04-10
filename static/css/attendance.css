@@ -42,11 +42,17 @@ button:hover {
     background-color: #0b2b7b;
 }
 
-.export-container {
+.action-container {
     display: flex;
+    align-items: center;  /* Vertically align the items in the middle */
     justify-content: center;
-    align-items: center;
+    gap: 10px;  /* Add space between the buttons */
 }
+
+.inline-form {
+    margin: 0;  /* Remove any default margin that may cause spacing issues */
+}
+
 
 .btn-export {
     background-color: #1244C6;

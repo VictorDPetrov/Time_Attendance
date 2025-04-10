@@ -33,13 +33,14 @@
         <br> <br>
         <button type="submit">Търсене</button>
     </form>
-
-    <div class="export-container">
+    
+    <div class="action-container">
+        <form action="{{ url_for('fetch_logs') }}" method="POST" class="inline-form">
+            <button type="submit" class="btn btn-export">Fetch Logs</button>
+        </form>
         <a href="/export_attendance" class="btn btn-export">Експортиране на данни</a>
-        <form action="{{ url_for('fetch_logs') }}" method="POST">
-            <button type="submit" class="btn btn-primary">Fetch Logs</button>
-        </form>    
     </div>
+    
 
         
     <div class="table-wrapper">
