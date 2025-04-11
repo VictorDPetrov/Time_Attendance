@@ -334,7 +334,7 @@ def export_csv():
     fieldnames = ['terminal', 'user_id', 'username', 'timestamp', 'status']
 
     def generate():
-        output = io.StringIO()
+        output = io.StringIO(newline='')
         writer = csv.DictWriter(output, fieldnames=fieldnames)
         writer.writeheader()
 
@@ -342,11 +342,18 @@ def export_csv():
             log['timestamp'] = log['timestamp'].strftime('%Y-%m-%d %H:%M:%S') if hasattr(log['timestamp'], 'strftime') else log['timestamp']
             writer.writerow(log)
 
-        output.seek(0)
-        return output.getvalue()
+        csv_string = output.getvalue()
+        output.close()
 
-    return Response(generate(), mimetype='text/csv', headers={"Content-Disposition": "attachment;filename=attendance_logs.csv"})
+        # Add UTF-8 BOM so Excel opens it correctly
+        bom = '\ufeff'  # UTF-8 Byte Order Mark
+        return bom + csv_string
 
+    return Response(
+        generate(),
+        mimetype='text/csv',
+        headers={"Content-Disposition": "attachment; filename=attendance_logs.csv"}
+    )
 
 @app.route('/export_json')
 def export_json():
@@ -495,38 +502,34 @@ def scan_card():
         return jsonify({"error": "An unexpected error occurred."}), 500
 
 
+from flask import Response, request
+from datetime import datetime, date, time, timedelta
 import csv
-from flask import Response
+import io
 
 @app.route('/export_attendance', methods=['GET'])
 def export_attendance():
-    start_date = request.args.get('start_date', None)
-    end_date = request.args.get('end_date', None)
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
 
-    # Fetch logs from the database or any source
     all_logs = fetch_logs_from_db(start_date, end_date)
 
-    # Convert string dates to datetime objects if provided
     if start_date:
         start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
     if end_date:
         end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
 
-    # Filter logs by date range if start_date and end_date are provided
     if start_date or end_date:
         filtered_logs = []
         for log in all_logs:
             log_time = log['workday'] if isinstance(log['workday'], date) else datetime.strptime(log['workday'], '%Y-%m-%d').date()
-
             if start_date and log_time < start_date:
                 continue
             if end_date and log_time > end_date:
                 continue
-
             filtered_logs.append(log)
         all_logs = filtered_logs
 
-    # Group by user_id and get first clock-in and last clock-out
     user_logs = {}
     for log in all_logs:
         user_id = log['userID']
@@ -537,14 +540,14 @@ def export_attendance():
         timestamp_out = None
 
         if isinstance(log['clockIn'], time):
-            timestamp_in = datetime.combine(datetime.today(), log['clockIn']) if log['clockIn'] else None
+            timestamp_in = datetime.combine(datetime.today(), log['clockIn'])
         elif isinstance(log['clockIn'], timedelta):
-            timestamp_in = datetime.combine(datetime.today(), datetime.min.time()) + log['clockIn'] if log['clockIn'] else None
+            timestamp_in = datetime.combine(datetime.today(), datetime.min.time()) + log['clockIn']
 
         if isinstance(log['clockOut'], time):
-            timestamp_out = datetime.combine(datetime.today(), log['clockOut']) if log['clockOut'] else None
+            timestamp_out = datetime.combine(datetime.today(), log['clockOut'])
         elif isinstance(log['clockOut'], timedelta):
-            timestamp_out = datetime.combine(datetime.today(), datetime.min.time()) + log['clockOut'] if log['clockOut'] else None
+            timestamp_out = datetime.combine(datetime.today(), datetime.min.time()) + log['clockOut']
 
         if key not in user_logs:
             user_logs[key] = {
@@ -562,33 +565,28 @@ def export_attendance():
             if user_logs[key]['last_clock_out'] is None or timestamp_out > user_logs[key]['last_clock_out']:
                 user_logs[key]['last_clock_out'] = timestamp_out
 
-    # Prepare data for export
     export_data = []
     for (user_id, workday), user_data in user_logs.items():
         export_data.append({
             "User ID": user_id,
             "Employee": user_data['employee'],
-            "Date": user_data['workday'],
-            "First Clock-In": user_data['first_clock_in'] if user_data['first_clock_in'] else "Not Clocked In",
-            "Last Clock-Out": user_data['last_clock_out'] if user_data['last_clock_out'] else "Not Clocked Out"
+            "Date": user_data['workday'].strftime('%Y-%m-%d'),
+            "First Clock-In": user_data['first_clock_in'].strftime('%H:%M:%S') if user_data['first_clock_in'] else "Not Clocked In",
+            "Last Clock-Out": user_data['last_clock_out'].strftime('%H:%M:%S') if user_data['last_clock_out'] else "Not Clocked Out"
         })
 
-    # Create a CSV file in memory
     def generate_csv():
-        # Use a StringIO buffer to write CSV in memory
-        import io
-        output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=["User ID", "Employee", "Date", "First Clock-In", "Last Clock-Out"])
+        output = io.StringIO(newline='')
+        writer = csv.DictWriter(output,
+                                fieldnames=["User ID", "Employee", "Date", "First Clock-In", "Last Clock-Out"],
+                                delimiter=';')  # <<< Това е ключовото
         writer.writeheader()
         for row in export_data:
             writer.writerow(row)
-        output.seek(0)  # Rewind the buffer to the beginning
-        return output
+        return output.getvalue()
 
-    # Return the CSV file as a response
-    csv_output = generate_csv()
     return Response(
-        csv_output,
+        generate_csv(),
         mimetype='text/csv',
         headers={"Content-Disposition": "attachment; filename=attendance_log.csv"}
     )
@@ -923,7 +921,7 @@ def fetch_logs():
     except Exception as e:
         flash(f'Error: {str(e)}', 'danger')
 
-    return redirect(url_for('users_page'))
+    return redirect(url_for('attendance'))
 
 
 @app.route('/delete-all-employees', methods=['POST'])

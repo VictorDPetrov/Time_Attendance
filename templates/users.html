@@ -20,21 +20,23 @@
         <a href="/" class="btn btn-outline-primary mt-2">Начало</a>
     </div>
 
-    <h1>Служители</h1>
-    <div class="text-end mb-3 addUser">
-        <a href="/add-employees" class="btn btn-outline-secondary btn-add-user">
+    <h1>Служители</h1> <br>
+    <div class="d-flex justify-content-center align-items-center flex-wrap gap-2 mb-3">
+        <a href="/add-employees" class="btn btn-outline-secondary">
             Добави служители
-        </a> <br>
+        </a> &nbsp; &nbsp;
+    
         <a href="{{ url_for('upload_employees_to_terminals') }}" class="btn btn-primary"
-            onclick="return confirm('Сигурни ли сте, че искате да качите всички служители на терминалите?')">
+           onclick="return confirm('Сигурни ли сте, че искате да качите всички служители на терминалите?')">
             Качване към терминалите
-        </a>
-        <br> <br>
+        </a> &nbsp; &nbsp;
+    
         <form action="{{ url_for('delete_all_employees') }}" method="POST"
-            onsubmit="return confirm('Сигурен ли си, че искаш да изтриеш ВСИЧКИ служители?');">
-            <button type="submit" class="btn-delete-users danger-button">Изтрий всички служители</button>
+              onsubmit="return confirm('Сигурен ли си, че искаш да изтриеш ВСИЧКИ служители?');" class="m-0">
+            <button type="submit" class="btn btn-danger">Изтрий всички служители</button>
         </form>
     </div>
+    
     <div class="table-wrapper">
         <div class="table-responsive">
             <table class="table table-bordered table-hover align-middle text-center">

@@ -5,11 +5,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/addEmployee.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}" />
     <title>Bdintex - Добавяне на служители</title>
 </head>
 
 <body>
-
+    <div class="header" style="text-align: center; margin: 20px 0;">
+        <a href="/">
+            <img src="{{ url_for('static', filename='images/bdintexLogo.png') }}" alt="Bdintex Logo" class="logo"
+                style="max-height: 80px;" />
+        </a>
+        <br />
+        <a href="/" class="btn btn-outline-primary mt-2">Начало</a>
+    </div>
     <div class="form-wrapper">
         <h2>Добавяне на служители</h2>
         <form action="{{ url_for('add_employee') }}" method="POST" enctype="multipart/form-data">
