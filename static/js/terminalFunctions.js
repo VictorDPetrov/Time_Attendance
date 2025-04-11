@@ -34,10 +34,6 @@ function sendCommand(endpoint, ip, callback) {
     location.reload()
   }
 
-  function handleUpload(ip) {
-    sendCommand('/api/ping', ip)
-  }
-
   function handleGetTime(ip, btn) {
     sendCommand('/api/get_time', ip, function (data) {
       const timeCell = btn.closest('tr').querySelector('td:nth-child(3)')

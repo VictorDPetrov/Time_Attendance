@@ -9,9 +9,49 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/table.css') }}" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <title>Bdintex - Присъствена форма</title>
+
+    <style>
+        .alert {
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+        }
+        .alert-success {
+            color: #155724;
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+        .alert-info {
+            color: #0c5460;
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+        .alert-warning {
+            color: #85640c;
+            background-color: #fff3cd;
+            border-color: #ffeeba;
+        }
+        .alert-danger {
+            color: #721c24;
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+    </style>
 </head>
 
 <body>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flashes">
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">
+          {{ message }}
+        </div>
+      {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
     <div class="header" style="text-align: center; margin: 20px 0;">
         <a href="/">
             <img src="{{ url_for('static', filename='images/bdintexLogo.png') }}" alt="Bdintex Logo" class="logo"
@@ -33,16 +73,31 @@
         <br> <br>
         <button type="submit">Търсене</button>
     </form>
-    
+
     <div class="action-container">
         <form action="{{ url_for('fetch_logs') }}" method="POST" class="inline-form">
-            <button type="submit" class="btn btn-export">Fetch Logs</button>
+            <button type="submit" class="btn btn-export">Синхронизация</button>
         </form>
         <a href="/export_attendance" class="btn btn-export">Експортиране на данни</a>
+        <a href="/delete-db-log" class="btn btnDel"
+            onclick="return confirm('Сигурни ли сте, че искате да изтриете ВСИЧКИ записи от Базата Данни?')">Изтриване
+            на БД</a>
     </div>
-    
 
-        
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flashes">
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">
+              {{ message }}
+            </div>
+          {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+    </div>
+
     <div class="table-wrapper">
         <div class="table-responsive">
             <table class="table table-bordered table-hover align-middle text-center">
@@ -56,17 +111,17 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tbody>
-                        {% for log in logs %}
-                        <tr>
-                            <td>{{ log.id }}</td>
-                            <td>{{ log.user }}</td>
-                            <td>{{ log.date.strftime('%Y-%m-%d') }}</td>
-                            <td>{{ log.first_clock_in }}</td>
-                            <td>{{ log.last_clock_out }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td>{{ log.id }}</td>
+                        <td>{{ log.user }}</td>
+                        <td>{{ log.date.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ log.first_clock_in }}</td>
+                        <td>{{ log.last_clock_out }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
                 </tbody>
             </table>
         </div>
