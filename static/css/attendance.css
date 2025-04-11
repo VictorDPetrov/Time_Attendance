@@ -1,8 +1,10 @@
 body {
     font-family: Arial, sans-serif;
     margin: 0;
+    padding-top: 50px;
     padding: 20px;
-    background-color: #f4f7fc;
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 h1 {

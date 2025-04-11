@@ -9,6 +9,8 @@ body {
     display: flex;
     flex-direction: column;
     background-color: #f8f9fa;
+    padding-top: 50px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .container {

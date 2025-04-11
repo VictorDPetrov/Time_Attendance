@@ -1,3 +1,9 @@
+body {
+    background-color: #f8f9fa;
+    padding-top: 50px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
 .form-wrapper {
     max-width: 600px;
     margin: 50px auto;
@@ -19,6 +25,13 @@
     margin: 10px 0;
     border: 1px solid #ddd;
     border-radius: 4px;
+}
+
+.logo {
+    display: block;
+    margin: 20px auto;
+    cursor: pointer;
+    width: 120px;
 }
 
 button {
