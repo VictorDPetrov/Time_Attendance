@@ -41,17 +41,6 @@
 </head>
 
 <body>
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      <div class="flashes">
-      {% for category, message in messages %}
-        <div class="alert alert-{{ category }}">
-          {{ message }}
-        </div>
-      {% endfor %}
-      </div>
-    {% endif %}
-  {% endwith %}
     <div class="header" style="text-align: center; margin: 20px 0;">
         <a href="/">
             <img src="{{ url_for('static', filename='images/bdintexLogo.png') }}" alt="Bdintex Logo" class="logo"
@@ -84,19 +73,7 @@
             на БД</a>
     </div>
 
-    <div class="container">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          <div class="flashes">
-          {% for category, message in messages %}
-            <div class="alert alert-{{ category }}">
-              {{ message }}
-            </div>
-          {% endfor %}
-          </div>
-        {% endif %}
-      {% endwith %}
-    </div>
+
 
     <div class="table-wrapper">
         <div class="table-responsive">

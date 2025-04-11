@@ -610,7 +610,7 @@ def export_attendance():
 @app.route('/users')
 def users_page():
     all_users = []
-
+    
     try:
         # Connect to the MySQL database using the db_config dictionary
         conn = mysql.connector.connect(**db_config)
@@ -727,12 +727,6 @@ def add_employee():
 
 @app.route('/upload-employees', methods=['GET'])
 def upload_employees_to_terminals():
-
-    flash("This is a test success message!", 'success')
-    flash("This is a test info message!", 'info')
-    flash("This is a test warning message!", 'warning')
-    flash("This is a test danger message!", 'danger')
-
     status_messages = []
     overall_success = True  # Flag to track overall success
     # Function to clear all users from the terminal
@@ -828,8 +822,7 @@ def upload_employees_to_terminals():
 
                 conn.enable_device()
                 conn.disconnect()
-                status_messages.append(f"✔ Successfully uploaded users to {device['ip']}.")
-                flash("Успешно добавени записи!")
+                status_messages.append(f"✔ Успешно добавени потребители към {device['name']}.")
 
             except Exception as e:
                 status_messages.append(f"Error connecting to terminal {device['ip']}: {str(e)}")
