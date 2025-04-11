@@ -2,8 +2,8 @@ from flask import Flask, render_template, Response, jsonify, redirect, url_for, 
 from datetime import datetime, timedelta, time, date
 from dotenv import dotenv_values
 from openpyxl import load_workbook
-import io, os, csv, json, socket, time, mysql.connector, requests, logging
-from zk import ZK
+import io, os, csv, socket, time, mysql.connector, requests, logging, re
+from zk import ZK, const
 
 config = dotenv_values(".env")
 
@@ -14,7 +14,6 @@ db_config = {
     "database": config["DB_NAME"]
 }
 
-
 PORT = 4370
 TIMEOUT = .5
 
@@ -22,16 +21,48 @@ app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
 
 terminals = [
-    {"name": "Terminal 1", "ip": "192.168.2.221"},
-    {"name": "Terminal 2", "ip": "192.168.2.222"},
+    {"name": "Terminal 1", "ip": "192.168.2.221", 'port': 4370},
+    {"name": "Terminal 2", "ip": "192.168.2.222", 'port': 4370},
 ]
+
+cyrillic_to_latin = str.maketrans({
+'А': 'A', 'а': 'a',
+'Б': 'B', 'б': 'b',
+'В': 'V', 'в': 'v',
+'Г': 'G', 'г': 'g',
+'Д': 'D', 'д': 'd',
+'Е': 'E', 'е': 'e',
+'Ж': 'Zh', 'ж': 'zh',
+'З': 'Z', 'з': 'z',
+'И': 'I', 'и': 'i',
+'Й': 'Y', 'й': 'y',
+'К': 'K', 'к': 'k',
+'Л': 'L', 'л': 'l',
+'М': 'M', 'м': 'm',
+'Н': 'N', 'н': 'n',
+'О': 'O', 'о': 'o',
+'П': 'P', 'п': 'p',
+'Р': 'R', 'р': 'r',
+'С': 'S', 'с': 's',
+'Т': 'T', 'т': 't',
+'У': 'U', 'у': 'u',
+'Ф': 'F', 'ф': 'f',
+'Х': 'H', 'х': 'h',
+'Ц': 'Ts', 'ц': 'ts',
+'Ч': 'Ch', 'ч': 'ch',
+'Ш': 'Sh', 'ш': 'sh',
+'Щ': 'Sht', 'щ': 'sht',
+'Ъ': 'A', 'ъ': 'a',
+'Ь': '', 'ь': '',
+'Ю': 'Yu', 'ю': 'yu',
+'Я': 'Ya', 'я': 'ya',
+})
 
 logging.basicConfig(level=logging.INFO)
 
 UPLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')
 ALLOWED_EXTENSIONS = {'csv', 'xlsx'}
 
-# Ensure the uploads directory exists
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
@@ -51,30 +82,24 @@ def get_card_numbers_from_zkteco():
     else:
         return []
 
-
-import mysql.connector
-from datetime import datetime
-
 def fetch_logs_from_db(start_date=None, end_date=None):
     try:
-        # Create a connection to the MySQL database
         conn = mysql.connector.connect(**db_config)
         
         # Using 'with' to ensure cursor and connection are properly closed
         with conn.cursor(dictionary=True) as cursor:
-            # Base query
             query = "SELECT userID, employee, workday, clockIn, clockOut FROM logs"
             filters = []
             params = []
 
             if start_date:
-                if isinstance(start_date, str):  # Check if it's a string
+                if isinstance(start_date, str):
                     start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
                 filters.append("workday >= %s")
                 params.append(start_date)
 
             if end_date:
-                if isinstance(end_date, str):  # Check if it's a string
+                if isinstance(end_date, str):
                     end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
                 filters.append("workday <= %s")
                 params.append(end_date)
@@ -86,7 +111,7 @@ def fetch_logs_from_db(start_date=None, end_date=None):
             cursor.execute(query, tuple(params))
             logs = cursor.fetchall()
 
-        conn.close()  # Close connection after the 'with' block is done
+        conn.close()
 
         return logs
     
@@ -101,7 +126,7 @@ def check_terminal_status(ip):
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(2)
-        result = sock.connect_ex((ip, PORT))  # Connect to the device on port 4370
+        result = sock.connect_ex((ip, PORT))
         sock.close()
         
         if result == 0:
@@ -164,8 +189,8 @@ def fetch_attendance_from_terminal(ip, label):
         })
     return logs
 
-def clear_all_users_from_device(ip, port=4370):
-    zk = ZK(ip, port=port, timeout=5, force_udp=True)
+def clear_all_users_from_device(ip):
+    zk = ZK(ip, port=PORT, timeout=5, force_udp=True)
     try:
         conn = zk.connect()
         conn.disable_device()
@@ -183,8 +208,8 @@ def clear_all_users_from_device(ip, port=4370):
         print(f"[ERROR] Could not clear users from {ip}: {e}")
         return False
     
-def clear_logs_from_device(ip, port=4370):
-    zk = ZK(ip, port=port, timeout=5, force_udp=True)
+def clear_logs_from_device(ip):
+    zk = ZK(ip, port=PORT, timeout=5, force_udp=True)
     try:
         conn = zk.connect()
         conn.disable_device()
@@ -369,10 +394,6 @@ def export_json():
 
     return jsonify(all_logs)
 
-from datetime import time # Needs to be imported again before loading the page
-
-from datetime import datetime, timedelta, date, time
-
 @app.route('/attendance', methods=['GET', 'POST'])
 def attendance():
     start_date = request.args.get('start_date', None)
@@ -413,12 +434,12 @@ def attendance():
         timestamp_out = None
 
         # Convert clock-in and clock-out to datetime objects if they are time or timedelta
-        if isinstance(log['clockIn'], time):
+        if isinstance(log['clockIn'], datetime):
             timestamp_in = datetime.combine(datetime.today(), log['clockIn']) if log['clockIn'] else None
         elif isinstance(log['clockIn'], timedelta):
             timestamp_in = datetime.combine(datetime.today(), datetime.min.time()) + log['clockIn'] if log['clockIn'] else None
 
-        if isinstance(log['clockOut'], time):
+        if isinstance(log['clockOut'], datetime):
             timestamp_out = datetime.combine(datetime.today(), log['clockOut']) if log['clockOut'] else None
         elif isinstance(log['clockOut'], timedelta):
             timestamp_out = datetime.combine(datetime.today(), datetime.min.time()) + log['clockOut'] if log['clockOut'] else None
@@ -452,7 +473,7 @@ def attendance():
             "last_clock_out": user_data['last_clock_out'].strftime('%H:%M') if user_data['last_clock_out'] else "Not Clocked Out"
         })
 
-    # ✅ Sort logs by date descending
+    # Sort logs by date descending
     display_logs.sort(key=lambda x: x['date'], reverse=True)
 
     return render_template('attendance.html', logs=display_logs, start_date=start_date, end_date=end_date)
@@ -500,12 +521,6 @@ def scan_card():
     except Exception as e:
         print(f"Error: {e}")
         return jsonify({"error": "An unexpected error occurred."}), 500
-
-
-from flask import Response, request
-from datetime import datetime, date, time, timedelta
-import csv
-import io
 
 @app.route('/export_attendance', methods=['GET'])
 def export_attendance():
@@ -595,7 +610,7 @@ def export_attendance():
 @app.route('/users')
 def users_page():
     all_users = []
-
+    
     try:
         # Connect to the MySQL database using the db_config dictionary
         conn = mysql.connector.connect(**db_config)
@@ -624,7 +639,7 @@ def users_page():
             # Add user data to the list
             all_users.append({
                 'user_id': user['ID'],
-                'name': user['employeeName'],
+                'name': user['employeeName'].translate(cyrillic_to_latin),
                 'card': card
             })
 
@@ -666,9 +681,9 @@ def add_employee():
                         csv_reader = csv.DictReader(f)
                         for row in csv_reader:
                             user_id = row['userID']
-                            employee_name = row['name']
+                            employee_name = row['name'].translate(cyrillic_to_latin)
                             card_number = row['cardNumber']
-                            users_to_add.append((user_id, employee_name, card_number))
+                            users_to_add.append((user_id, employee_name.translate(cyrillic_to_latin), card_number))
 
                     # Insert users into the database (for CSV)
                     conn = mysql.connector.connect(**db_config)
@@ -688,7 +703,7 @@ def add_employee():
                     # Iterate over the rows in the Excel sheet (skip the header row)
                     for row in sheet.iter_rows(min_row=2, values_only=True):
                         user_id, employee_name, card_number = row
-                        users_to_add.append((user_id, employee_name, card_number))
+                        users_to_add.append((user_id, employee_name.translate(cyrillic_to_latin), card_number))
 
                     # Insert users into the database (for XLSX)
                     conn = mysql.connector.connect(**db_config)
@@ -712,20 +727,12 @@ def add_employee():
 
 @app.route('/upload-employees', methods=['GET'])
 def upload_employees_to_terminals():
-    from zk import ZK, const
-    import mysql.connector
-    import re
-
-    # Define terminals with IP addresses
-    terminals = [
-        {'ip': '192.168.2.221', 'port': 4370, 'name': 'Terminal 1'},
-        {'ip': '192.168.2.222', 'port': 4370, 'name': 'Terminal 2'}
-    ]
-
+    status_messages = []
+    overall_success = True  # Flag to track overall success
     # Function to clear all users from the terminal
     def clear_all_users_from_device(ip):
         try:
-            zk = ZK(ip, port=4370, timeout=5)
+            zk = ZK(ip, port=PORT, timeout=5)
             conn = zk.connect()
             if conn is None:
                 raise Exception(f"Could not connect to terminal {ip}")
@@ -775,7 +782,7 @@ def upload_employees_to_terminals():
                 print(f"Attempting to clear existing users from {device['ip']}...")
                 success = clear_all_users_from_device(device['ip'])
                 if not success:
-                    status_messages.append(f"❌ Failed to clear users from {device['name']} ({device['ip']})")
+                    status_messages.append(f"Failed to clear users from {device['name']} ({device['ip']})")
                     continue  # Skip to next terminal if user deletion fails
 
                 # Step 3: Connect to the terminal and upload new users
@@ -788,7 +795,7 @@ def upload_employees_to_terminals():
                         user_id = str(emp.get('ID'))
                         uid = int(emp.get('ID'))
 
-                        name = emp.get('employeeName') or 'Unknown'
+                        name = emp.get('employeeName').translate(cyrillic_to_latin) or 'Unknown'
                         name = re.sub(r'[^\x00-\x7F]', '', name)[:24]
 
                         card = str(emp.get('cardNumber') or '')
@@ -800,7 +807,7 @@ def upload_employees_to_terminals():
 
                         conn.set_user(
                             uid=uid,
-                            name=name,
+                            name=name.translate(cyrillic_to_latin),
                             privilege=const.USER_DEFAULT,
                             password='',
                             group_id='',
@@ -809,16 +816,16 @@ def upload_employees_to_terminals():
                         )
 
                     except Exception as user_err:
-                        msg = f"❌ Error uploading user {emp.get('employeeName')}: {str(user_err)}"
+                        msg = f"Error uploading user {emp.get('employeeName')}: {str(user_err)}"
                         print(msg)
                         status_messages.append(msg)
 
                 conn.enable_device()
                 conn.disconnect()
-                status_messages.append(f"✔ Successfully uploaded users to {device['ip']}.")
+                status_messages.append(f"✔ Успешно добавени потребители към {device['name']}.")
 
             except Exception as e:
-                status_messages.append(f"❌ Error connecting to terminal {device['ip']}: {str(e)}")
+                status_messages.append(f"Error connecting to terminal {device['ip']}: {str(e)}")
 
         # Flash all status messages
         for msg in status_messages:
@@ -829,31 +836,8 @@ def upload_employees_to_terminals():
 
     return redirect(url_for('users_page'))
 
-@app.route('/test-terminal')
-def test_terminal():
-    from zk import ZK, const
-    zk = ZK('192.168.2.221', port=4370)
-    try:
-        conn = zk.connect()
-        conn.disable_device()
-        conn.set_user(uid=10000, name='Test', privilege=const.USER_DEFAULT, password='', group_id='', user_id='1000000', card='123456')
-        conn.enable_device()
-        conn.disconnect()
-        return "Success"
-    except Exception as e:
-        return f"Error: {str(e)}"
-
 @app.route('/fetch-logs', methods=['POST'])
 def fetch_logs():
-    from zk import ZK
-    import mysql.connector
-    from datetime import datetime
-
-    terminals = [
-        {'ip': '192.168.2.221', 'port': 4370, 'name': 'Terminal 1'},
-        {'ip': '192.168.2.222', 'port': 4370, 'name': 'Terminal 2'}
-    ]
-
     try:
         # Connect to the database
         db = mysql.connector.connect(**db_config)
@@ -955,6 +939,21 @@ def delete_logs():
 
         return redirect(url_for('index'))  # Or any page you prefer after logs are deleted
 
+    except Exception as e:
+        return f"Error: {str(e)}", 500
+
+@app.route('/delete-db-log', methods=['GET', 'POST'])
+def delete_db_log():
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM logs")
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return redirect(url_for('attendance'))
+    
     except Exception as e:
         return f"Error: {str(e)}", 500
 

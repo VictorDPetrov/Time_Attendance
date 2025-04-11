@@ -70,3 +70,18 @@ button:hover {
     color: #FFF;
     background-color: #0f36A1;
 }
+
+.btnDel {
+    background-color: #DC3545;
+    color: #FFF;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    font-weight: 500;
+    padding: 8px 16px;
+    transition: 0.2s ease-in-out;
+}
+
+.btnDel:hover {
+    color: #FFF;
+    background-color: #b92e3c;
+}
