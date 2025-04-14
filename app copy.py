@@ -84,52 +84,6 @@ def get_card_numbers_from_zkteco():
 
 def fetch_logs_from_db(start_date=None, end_date=None):
     try:
-        # Establish database connection using db_config
-        conn = mysql.connector.connect(**db_config)
-        
-        # Using 'with' to ensure cursor and connection are properly closed
-        with conn.cursor(dictionary=True) as cursor:
-            query = "SELECT userID, employee, workday, clockIn, clockOut FROM logs"
-            filters = []
-            params = []
-
-            # Adding filter for start date
-            if start_date:
-                if isinstance(start_date, str):
-                    start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-                filters.append("workday >= %s")
-                params.append(start_date)
-
-            # Adding filter for end date
-            if end_date:
-                if isinstance(end_date, str):
-                    end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
-                filters.append("workday <= %s")
-                params.append(end_date)
-
-            # Append filters to query if any exist
-            if filters:
-                query += " WHERE " + " AND ".join(filters)
-
-            # Execute the query with parameters to prevent SQL injection
-            cursor.execute(query, tuple(params))
-            logs = cursor.fetchall()
-
-            # If no logs found, log this case
-            if not logs:
-                print("No attendance logs found for the given date range.")
-
-        conn.close()
-
-        return logs
-    
-    except mysql.connector.Error as e:
-        print(f"Database error: {e}")
-        return {"error": "Database connection failed."}
-    except Exception as e:
-        print(f"Error: {e}")
-        return {"error": "An unexpected error occurred."}
-    try:
         conn = mysql.connector.connect(**db_config)
         
         # Using 'with' to ensure cursor and connection are properly closed
@@ -442,46 +396,54 @@ def export_json():
 
 @app.route('/attendance', methods=['GET', 'POST'])
 def attendance():
-    # Get start_date and end_date from the query string (if provided)
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
-    if start_date:
-        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
-    if end_date:
-        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
-
-    # Fetch all attendance logs for the date range
+    # Fetch logs from the database
     all_logs = fetch_logs_from_db(start_date, end_date)
 
-    # Fetch all users
-    all_users = fetch_logs_from_db()
+    # Convert string dates to datetime objects if provided
+    if start_date:
+        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()  # Convert to datetime.date
+    if end_date:
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()  # Convert to datetime.date
 
-    # Filter the logs to group by userID and workday
+    # Filter logs by date range if start_date and end_date are provided
+    if start_date or end_date:
+        filtered_logs = []
+        for log in all_logs:
+            # Check if log['workday'] is already a datetime.date object
+            log_time = log['workday'] if isinstance(log['workday'], date) else datetime.strptime(log['workday'], '%Y-%m-%d').date()
+
+            if start_date and log_time < start_date:
+                continue
+            if end_date and log_time > end_date:
+                continue
+
+            filtered_logs.append(log)
+        all_logs = filtered_logs
+
+    # Group by user_id and get first clock-in and last clock-out
     user_logs = {}
     for log in all_logs:
         user_id = log['userID']
         workday = log['workday'] if isinstance(log['workday'], date) else datetime.strptime(log['workday'], '%Y-%m-%d').date()
-        key = (user_id, workday)
-
-        clock_in = log.get('clockIn')
-        clock_out = log.get('clockOut')
+        key = (user_id, workday)  # Grouping key
 
         timestamp_in = None
         timestamp_out = None
 
-        # Convert clock-in and clock-out times to datetime if necessary
-        if isinstance(clock_in, timedelta):
-            timestamp_in = datetime.combine(date.today(), datetime.min.time()) + clock_in
-        elif isinstance(clock_in, datetime):
-            timestamp_in = clock_in
+        # Convert clock-in and clock-out to datetime objects if they are time or timedelta
+        if isinstance(log['clockIn'], datetime):
+            timestamp_in = datetime.combine(datetime.today(), log['clockIn']) if log['clockIn'] else None
+        elif isinstance(log['clockIn'], timedelta):
+            timestamp_in = datetime.combine(datetime.today(), datetime.min.time()) + log['clockIn'] if log['clockIn'] else None
 
-        if isinstance(clock_out, timedelta):
-            timestamp_out = datetime.combine(date.today(), datetime.min.time()) + clock_out
-        elif isinstance(clock_out, datetime):
-            timestamp_out = clock_out
+        if isinstance(log['clockOut'], datetime):
+            timestamp_out = datetime.combine(datetime.today(), log['clockOut']) if log['clockOut'] else None
+        elif isinstance(log['clockOut'], timedelta):
+            timestamp_out = datetime.combine(datetime.today(), datetime.min.time()) + log['clockOut'] if log['clockOut'] else None
 
-        # Initialize user_logs if not present for the (user_id, workday) combination
         if key not in user_logs:
             user_logs[key] = {
                 'employee': log['employee'],
@@ -490,122 +452,31 @@ def attendance():
                 'workday': workday
             }
 
-        # Record the earliest clock-in for the day
+        # Record earliest clock-in
         if timestamp_in:
             if user_logs[key]['first_clock_in'] is None or timestamp_in < user_logs[key]['first_clock_in']:
                 user_logs[key]['first_clock_in'] = timestamp_in
 
-        # Record the latest clock-out for the day
+        # Record latest clock-out
         if timestamp_out:
             if user_logs[key]['last_clock_out'] is None or timestamp_out > user_logs[key]['last_clock_out']:
                 user_logs[key]['last_clock_out'] = timestamp_out
 
-    # Generate the date range for the selected start and end dates
-    today = date.today()
-    start_date = start_date or today
-    end_date = end_date or today
-    date_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
-
-    # Prepare the display logs to show in the table
+    # Prepare the list to be displayed in the table
     display_logs = []
-    for user in all_users:
-        for day in date_range:
-            key = (user['userID'], day)
-            log_entry = user_logs.get(key)
+    for (user_id, workday), user_data in user_logs.items():
+        display_logs.append({
+            "id": user_id,
+            "user": user_data['employee'],
+            "date": user_data['workday'],
+            "first_clock_in": user_data['first_clock_in'].strftime('%H:%M') if user_data['first_clock_in'] else "Not Clocked In",
+            "last_clock_out": user_data['last_clock_out'].strftime('%H:%M') if user_data['last_clock_out'] else "Not Clocked Out"
+        })
 
-            display_logs.append({
-                "id": user['userID'],
-                "user": user['employee'],
-                "date": day,
-                "first_clock_in": log_entry['first_clock_in'].strftime('%H:%M') if log_entry and log_entry['first_clock_in'] else "-",
-                "last_clock_out": log_entry['last_clock_out'].strftime('%H:%M') if log_entry and log_entry['last_clock_out'] else "-"
-            })
-
-    # Sort by date (descending) and user name (ascending)
-    display_logs.sort(key=lambda x: (x['date'], x['user']), reverse=True)
+    # Sort logs by date descending
+    display_logs.sort(key=lambda x: x['date'], reverse=True)
 
     return render_template('attendance.html', logs=display_logs, start_date=start_date, end_date=end_date)
-
-
-    # # Get start_date and end_date from the query string (if provided)
-    # start_date = request.args.get('start_date', None)
-    # end_date = request.args.get('end_date', None)
-
-    # if start_date:
-    #     start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
-    # if end_date:
-    #     end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
-
-    # # Fetch all attendance logs for the date range
-    # all_logs = fetch_logs_from_db(start_date, end_date)
-
-    # # Fetch all users
-    # all_users = fetch_logs_from_db()
-
-    # # Filter the logs to group by userID and workday
-    # user_logs = {}
-    # for log in all_logs:
-    #     user_id = log['userID']
-    #     workday = log['workday'] if isinstance(log['workday'], date) else datetime.strptime(log['workday'], '%Y-%m-%d').date()
-    #     key = (user_id, workday)
-
-    #     clock_in = log.get('clockIn')
-    #     clock_out = log.get('clockOut')
-
-    #     timestamp_in = None
-    #     timestamp_out = None
-
-    #     if isinstance(clock_in, timedelta):
-    #         timestamp_in = datetime.combine(date.today(), datetime.min.time()) + clock_in
-    #     elif isinstance(clock_in, datetime):
-    #         timestamp_in = clock_in
-
-    #     if isinstance(clock_out, timedelta):
-    #         timestamp_out = datetime.combine(date.today(), datetime.min.time()) + clock_out
-    #     elif isinstance(clock_out, datetime):
-    #         timestamp_out = clock_out
-
-    #     if key not in user_logs:
-    #         user_logs[key] = {
-    #             'employee': log['employee'],
-    #             'first_clock_in': None,
-    #             'last_clock_out': None,
-    #             'workday': workday
-    #         }
-
-    #     if timestamp_in:
-    #         if user_logs[key]['first_clock_in'] is None or timestamp_in < user_logs[key]['first_clock_in']:
-    #             user_logs[key]['first_clock_in'] = timestamp_in
-
-    #     if timestamp_out:
-    #         if user_logs[key]['last_clock_out'] is None or timestamp_out > user_logs[key]['last_clock_out']:
-    #             user_logs[key]['last_clock_out'] = timestamp_out
-
-    # # Generate the date range
-    # today = date.today()
-    # start_date = start_date or today
-    # end_date = end_date or today
-    # date_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
-
-    # # Prepare the display logs
-    # display_logs = []
-    # for user in all_users:
-    #     for day in date_range:
-    #         key = (user['userID'], day) 
-    #         log_entry = user_logs.get(key)
-
-    #         display_logs.append({
-    #             "id": user['userID'],
-    #             "user": user['employee'],
-    #             "date": day,
-    #             "first_clock_in": log_entry['first_clock_in'].strftime('%H:%M') if log_entry and log_entry['first_clock_in'] else "-",
-    #             "last_clock_out": log_entry['last_clock_out'].strftime('%H:%M') if log_entry and log_entry['last_clock_out'] else "-"
-    #         })
-
-    # # Sort by date (descending) and user name (ascending)
-    # display_logs.sort(key=lambda x: (x['date'], x['user']), reverse=True)
-
-    # return render_template('attendance.html', logs=display_logs, start_date=start_date, end_date=end_date)
 
 @app.route('/scan_card', methods=['POST'])
 def scan_card():
